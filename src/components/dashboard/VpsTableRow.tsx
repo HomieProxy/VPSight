@@ -36,11 +36,16 @@ import {
 } from 'lucide-react';
 import { format, parseISO, isValid, differenceInDays, isFuture, addMonths, addYears, formatISO, addDays, getDaysInMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
-
-interface VpsTableRowProps {
-  vps: VpsData;
-  onActionSuccess: () => void;
-}
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const formatDetailDate = (isoString: string | null | undefined): string => {
   if (!isoString) return 'N/A';
@@ -82,23 +87,10 @@ const getCycleDetails = (
       const monthsMatch = c.match(/(\d+)/);
       const numMonths = monthsMatch ? parseInt(monthsMatch[1], 10) : 1;
       startDate = addMonths(endDate, -numMonths);
-      // For monthly, totalDaysInCycle should be days in the month leading up to endDate
-      // If endDate is Feb 28th (after a 1-month cycle from Jan 28th), then totalDaysInCycle is days in Feb.
-      // Or, if end date is Mar 1st, and start was Feb 1st, total days is days in Feb.
-      // The most accurate is days in the month of the *start* date of the period that *ends* on endDate.
-      // So, if endDate is end of March, and it's a monthly cycle, startDate is beginning of March. Total days = days in March.
-      const tempStartDateForCalc = addMonths(endDate, -numMonths); // Start of the period that *ends* at endDate
-      const daysInPeriodMonth = getDaysInMonth(tempStartDateForCalc);
-      const totalDays = differenceInDays(endDate, tempStartDateForCalc); // This could span across month changes for "X months"
-                                                                    // A simpler model: for "1 month", use days in the month of the start date.
       if (numMonths === 1) {
          return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: getDaysInMonth(startDate) };
       }
-       // For "X months", it's more complex, sum of days in those months.
-       // For simplicity, use differenceInDays for multi-month cycles.
       return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: differenceInDays(endDate, startDate) };
-
-
     } else if (c.includes('year') || c.includes('annu')) {
       const yearsMatch = c.match(/(\d+)/);
       let numYears = yearsMatch ? parseInt(yearsMatch[1], 10) : 1;
@@ -115,7 +107,6 @@ const getCycleDetails = (
          if (justDaysNumberMatch) {
             startDate = addDays(endDate, -parseInt(justDaysNumberMatch[1], 10));
          } else {
-            // Fallback to a sensible default if cycle string is unparseable, e.g., 30 days
             startDate = addDays(endDate, -30); 
             const totalDays = differenceInDays(endDate, startDate);
             return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: totalDays > 0 ? totalDays : 30 };
@@ -126,10 +117,56 @@ const getCycleDetails = (
     return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: totalDays > 0 ? totalDays : 0 };
   } catch (e) {
     console.error("Error in getCycleDetails:", e);
-    return { startDateISO: null, totalDaysInCycle: 0 }; // Fallback
+    return { startDateISO: null, totalDaysInCycle: 0 };
   }
 };
 
+const getCountryFlagEmoji = (locationString: string | null | undefined): string | null => {
+  if (!locationString) return null;
+  
+  // Prioritize multi-word country names first to avoid partial matches
+  const upperLocationFull = locationString.toUpperCase();
+  if (upperLocationFull.includes('UNITED STATES')) return '🇺🇸';
+  if (upperLocationFull.includes('UNITED KINGDOM')) return '🇬🇧';
+
+  // Then check parts for common codes/names
+  const normalizedParts = locationString.toUpperCase().replace(/[\/\-\,\.]/g, ' ').split(' ');
+  const flagMap: Record<string, string> = {
+    'USA': '🇺🇸', 'US': '🇺🇸',
+    'JAPAN': '🇯🇵', 'JP': '🇯🇵',
+    'GERMANY': '🇩🇪', 'DE': '🇩🇪', 'DEUTSCHLAND': '🇩🇪',
+    'UK': '🇬🇧', 'GB': '🇬🇧',
+    'FRANCE': '🇫🇷', 'FR': '🇫🇷',
+    'CANADA': '🇨🇦', 'CA': '🇨🇦',
+    'AUSTRALIA': '🇦🇺', 'AU': '🇦🇺',
+    'CHINA': '🇨🇳', 'CN': '🇨🇳',
+    'INDIA': '🇮🇳', 'IN': '🇮🇳',
+    'BRAZIL': '🇧🇷', 'BR': '🇧🇷',
+    'NETHERLANDS': '🇳🇱', 'NL': '🇳🇱',
+    'SINGAPORE': '🇸🇬', 'SG': '🇸🇬',
+    'ITALY': '🇮🇹', 'IT': '🇮🇹',
+    'SPAIN': '🇪🇸', 'ES': '🇪🇸',
+    'RUSSIA': '🇷🇺', 'RU': '🇷🇺',
+    'SOUTH KOREA': '🇰🇷', 'KR': '🇰🇷',
+    'SWEDEN': '🇸🇪', 'SE': '🇸🇪',
+    'SWITZERLAND': '🇨🇭', 'CH': '🇨🇭',
+    'NORWAY': '🇳🇴', 'NO': '🇳🇴',
+    'HONG KONG': '🇭🇰', 'HK': '🇭🇰',
+  };
+
+  for (const part of normalizedParts) {
+    if (flagMap[part]) {
+      return flagMap[part];
+    }
+  }
+  return null;
+};
+
+
+interface VpsTableRowProps {
+  vps: VpsData;
+  onActionSuccess: () => void;
+}
 
 export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -137,35 +174,35 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   
   const [isRenewalAcknowledged, setIsRenewalAcknowledged] = useState(false);
   const [isAutoRenewing, setIsAutoRenewing] = useState(false);
-  
-  // Reset acknowledgment and auto-renewing state if the VPS ID changes
+  const [showConfirmRenewDialog, setShowConfirmRenewDialog] = useState(false);
+
   useEffect(() => {
     setIsRenewalAcknowledged(false);
     setIsAutoRenewing(false);
   }, [vps.id]);
 
-  // Effect for client-side "auto-renewal"
   useEffect(() => {
     const performAutoRenewal = async () => {
-      if (
-        isRenewalAcknowledged &&
-        ((typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 0) || vps.daysToExpiry === 'Expired') &&
-        !isAutoRenewing // Ensure it's not already trying to renew this instance
-      ) {
-        setIsAutoRenewing(true); // Set flag to prevent multiple calls
+      if (isAutoRenewing) return; 
+
+      const isExpired = typeof vps.daysToExpiry === 'string' && vps.daysToExpiry.toLowerCase() === 'expired';
+      const isDueForRenewal = typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 0;
+
+      if (isRenewalAcknowledged && (isExpired || isDueForRenewal)) {
+        setIsAutoRenewing(true);
         toast({ 
             title: "Auto-Renewal Triggered", 
-            description: `Attempting to auto-renew VPS: ${vps.name} (ID: ${vps.id}). It expired or is about to expire.` 
+            description: `Attempting to auto-renew VPS: ${vps.name} (ID: ${vps.id}).` 
         });
         try {
           const result = await renewVpsInstance(parseInt(vps.id, 10));
           if (result.success) {
             toast({ 
                 title: "Auto-Renewal Successful", 
-                description: `VPS ${vps.name} has been auto-renewed. New expiry: ${result.data?.newEndDate}` 
+                description: `VPS ${vps.name} has been auto-renewed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` 
             });
-            onActionSuccess(); // Re-fetch data to update the row
-            setIsRenewalAcknowledged(false); // Reset acknowledgment for the next cycle
+            onActionSuccess(); 
+            setIsRenewalAcknowledged(false); 
           } else {
             toast({ 
                 title: "Auto-Renewal Failed", 
@@ -180,7 +217,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
             variant: "destructive" 
           });
         } finally {
-          setIsAutoRenewing(false); // Reset flag regardless of outcome
+          setIsAutoRenewing(false);
         }
       }
     };
@@ -190,7 +227,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
 
   const formatDaysToExpiryText = (days: number | string): string => {
     if (typeof days === 'string') return days; 
-    if (days < 0) return 'Expired'; // Should be caught by string "Expired" from API ideally
+    if (days < 0) return 'Expired';
     if (days === 0) return 'Expires Today';
     return `${days}d`;
   };
@@ -204,49 +241,56 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   );
   
   const canAcknowledgeRenewal = !isRenewalAcknowledged && (
-    (typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0) ||
-    (vps.daysToExpiry === 'Expired' && vps.note_billing_end_date !== null) // Allow acknowledging expired if it has an end date
+    ((typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0) ||
+    (typeof vps.daysToExpiry === 'string' && vps.daysToExpiry.toLowerCase() === 'expired')) &&
+    vps.note_billing_end_date !== null 
   );
 
-
-  const handleAcknowledgeRenewal = (e: React.MouseEvent) => {
+  const handleAcknowledgeRenewalClick = (e: React.MouseEvent) => {
     e.stopPropagation(); 
+    setShowConfirmRenewDialog(true);
+  };
+
+  const confirmAcknowledgeRenewal = () => {
     setIsRenewalAcknowledged(true);
     toast({ 
       title: "Renewal Acknowledged", 
-      description: `VPS ${vps.name} will be auto-renewed upon expiry (or immediately if already expired).` 
+      description: `VPS ${vps.name} will be auto-renewed upon expiry (or immediately if already expired and acknowledged).` 
     });
+    setShowConfirmRenewDialog(false);
   };
 
   const { totalDaysInCycle } = getCycleDetails(vps.note_billing_end_date, vps.billingCycle);
   
   let daysToDisplayForBar: number | string = vps.daysToExpiry;
   let progressBarPercentage = 0;
-  let progressIndicatorColor = "bg-primary"; 
+  let progressIndicatorColorClass = "bg-primary"; 
 
   if (typeof daysToDisplayForBar === 'number') {
     const actualDaysLeftForBar = Math.max(0, daysToDisplayForBar);
     progressBarPercentage = (totalDaysInCycle > 0)
         ? Math.min(100, Math.max(0, (actualDaysLeftForBar / totalDaysInCycle) * 100))
-        : 0;
+        : (actualDaysLeftForBar > 0 ? 100 : 0);
+
 
     if (daysToDisplayForBar < 0) { 
-      progressIndicatorColor = "bg-muted"; 
+      progressIndicatorColorClass = "bg-muted"; 
     } else if (daysToDisplayForBar <= 7) { 
-      progressIndicatorColor = "bg-red-500";
+      progressIndicatorColorClass = "bg-red-500";
     } else if (daysToDisplayForBar <= 15) { 
-      progressIndicatorColor = "bg-orange-500";
+      progressIndicatorColorClass = "bg-orange-500";
     } else { 
-      progressIndicatorColor = "bg-green-500";
+      progressIndicatorColorClass = "bg-green-500";
     }
-  } else if (daysToDisplayForBar === 'Expired') {
+  } else if (typeof daysToDisplayForBar === 'string' && daysToDisplayForBar.toLowerCase() === 'expired') {
       progressBarPercentage = 0;
-      progressIndicatorColor = "bg-muted"; 
-  } else { // N/A or other strings
+      progressIndicatorColorClass = "bg-destructive"; 
+  } else { 
       progressBarPercentage = 0; 
-      progressIndicatorColor = "bg-muted"; 
+      progressIndicatorColorClass = "bg-muted"; 
   }
 
+  const flagEmoji = getCountryFlagEmoji(vps.location);
 
   return (
     <>
@@ -273,7 +317,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
         </TableCell>
         <TableCell className="p-2 text-sm whitespace-nowrap">
           <div className="flex items-center gap-1.5">
-            <GlobeIcon className="h-4 w-4 text-muted-foreground" />
+            {flagEmoji ? <span className="text-base leading-none">{flagEmoji}</span> : <GlobeIcon className="h-4 w-4 text-muted-foreground" />}
             {vps.location}
           </div>
         </TableCell>
@@ -286,7 +330,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
                 <UsageBar 
                   percentage={progressBarPercentage} 
                   className="w-16 sm:w-20 h-3"
-                  barClassName={progressIndicatorColor}
+                  barClassName={progressIndicatorColorClass}
                   showText={false} 
                 />
                 <span className="text-xs w-auto min-w-[30px] text-right">{formatDaysToExpiryText(vps.daysToExpiry)}</span>
@@ -299,15 +343,15 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
             )}
             
             {isRenewalAcknowledged ? (
-                <CheckCircle2Icon className="h-5 w-5 text-green-500 shrink-0" title={`Renewal acknowledged. Auto-renewal triggered/will trigger upon expiry.`} />
+                <CheckCircle2Icon className="h-5 w-5 text-green-500 shrink-0" title={`Renewal acknowledged. Auto-renewal triggered or will trigger upon expiry.`} />
             ) : canAcknowledgeRenewal ? ( 
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="h-6 px-1.5 py-0 text-xs shrink-0"
-                onClick={handleAcknowledgeRenewal}
+                onClick={handleAcknowledgeRenewalClick}
                 disabled={isAutoRenewing}
-                title="Acknowledge upcoming renewal to enable auto-renewal at expiry"
+                title="Acknowledge upcoming/expired renewal"
               >
                 {isAutoRenewing ? <Loader2Icon className="h-3 w-3 animate-spin" /> : <BellRingIcon className="h-3 w-3"/>}
               </Button>
@@ -387,6 +431,22 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
           </TableCell>
         </TableRow>
       )}
+
+      <AlertDialog open={showConfirmRenewDialog} onOpenChange={setShowConfirmRenewDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Acknowledge Renewal</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to acknowledge the renewal for VPS: {vps.name}?
+              This will enable auto-renewal when it expires.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAcknowledgeRenewal}>Acknowledge</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -407,6 +467,7 @@ export function VpsTableSkeletonRow() {
               <div className="h-5 bg-muted rounded animate-pulse" 
                    style={{ 
                      width: i === 1 ? '120px' : 
+                            (i === 3) ? '80px' : // Location column
                             (i >= 10 && i <=12) ? '60px' : '50px' 
                    }} />
             )}
