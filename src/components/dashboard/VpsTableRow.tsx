@@ -107,6 +107,7 @@ const getCycleDetails = (
          if (justDaysNumberMatch) {
             startDate = addDays(endDate, -parseInt(justDaysNumberMatch[1], 10));
          } else {
+            // Default to 30 days if cycle string is not parsable to a known duration and not just a number
             startDate = addDays(endDate, -30); 
             const totalDays = differenceInDays(endDate, startDate);
             return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: totalDays > 0 ? totalDays : 30 };
@@ -123,19 +124,14 @@ const getCycleDetails = (
 
 const getCountryFlagEmoji = (locationString: string | null | undefined): string | null => {
   if (!locationString) return null;
-  
-  // Prioritize multi-word country names first to avoid partial matches
-  const upperLocationFull = locationString.toUpperCase();
-  if (upperLocationFull.includes('UNITED STATES')) return '🇺🇸';
-  if (upperLocationFull.includes('UNITED KINGDOM')) return '🇬🇧';
 
-  // Then check parts for common codes/names
-  const normalizedParts = locationString.toUpperCase().replace(/[\/\-\,\.]/g, ' ').split(' ');
+  const upperLocation = locationString.toUpperCase();
+
   const flagMap: Record<string, string> = {
-    'USA': '🇺🇸', 'US': '🇺🇸',
+    'UNITED STATES': '🇺🇸', 'USA': '🇺🇸', 'US': '🇺🇸',
+    'UNITED KINGDOM': '🇬🇧', 'UK': '🇬🇧', 'GB': '🇬🇧',
     'JAPAN': '🇯🇵', 'JP': '🇯🇵',
     'GERMANY': '🇩🇪', 'DE': '🇩🇪', 'DEUTSCHLAND': '🇩🇪',
-    'UK': '🇬🇧', 'GB': '🇬🇧',
     'FRANCE': '🇫🇷', 'FR': '🇫🇷',
     'CANADA': '🇨🇦', 'CA': '🇨🇦',
     'AUSTRALIA': '🇦🇺', 'AU': '🇦🇺',
@@ -154,11 +150,33 @@ const getCountryFlagEmoji = (locationString: string | null | undefined): string 
     'HONG KONG': '🇭🇰', 'HK': '🇭🇰',
   };
 
+  // 1. Check for a direct match of the full uppercase string in the map
+  if (flagMap[upperLocation]) {
+    return flagMap[upperLocation];
+  }
+
+  // 2. Check if the location string *contains* any of the map keys (longer keys first)
+  //    as whole words/phrases.
+  const sortedKeys = Object.keys(flagMap).sort((a, b) => b.length - a.length);
+  for (const key of sortedKeys) {
+    // Escape special characters in key for regex
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escapedKey}\\b`);
+    if (regex.test(upperLocation)) {
+      return flagMap[key];
+    }
+  }
+
+  // 3. If no direct or phrase match, split the location string and check parts (already covered by regex approach for single word keys)
+  // This part is effectively covered by the regex approach if keys like "US", "JP" are handled.
+  // However, keeping it as a fallback if the regex approach for single terms needs more specific handling.
+  const normalizedParts = upperLocation.replace(/[\/\-\,\.]/g, ' ').split(' ').filter(part => part.length > 0);
   for (const part of normalizedParts) {
     if (flagMap[part]) {
       return flagMap[part];
     }
   }
+  
   return null;
 };
 
@@ -174,21 +192,22 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   
   const [isRenewalAcknowledged, setIsRenewalAcknowledged] = useState(false);
   const [isAutoRenewing, setIsAutoRenewing] = useState(false);
-  const [showConfirmRenewDialog, setShowConfirmRenewDialog] = useState(false);
+  const [showConfirmAcknowledgeDialog, setShowConfirmAcknowledgeDialog] = useState(false);
 
+  // Reset acknowledgement state when the VPS ID changes
   useEffect(() => {
     setIsRenewalAcknowledged(false);
-    setIsAutoRenewing(false);
+    setIsAutoRenewing(false); // Also reset auto-renewing flag
   }, [vps.id]);
 
+  // Effect to perform auto-renewal if acknowledged and expired
   useEffect(() => {
     const performAutoRenewal = async () => {
       if (isAutoRenewing) return; 
 
-      const isExpired = typeof vps.daysToExpiry === 'string' && vps.daysToExpiry.toLowerCase() === 'expired';
-      const isDueForRenewal = typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 0;
+      const isExpiredOrDue = (typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 0) || vps.daysToExpiry === 'Expired';
 
-      if (isRenewalAcknowledged && (isExpired || isDueForRenewal)) {
+      if (isRenewalAcknowledged && isExpiredOrDue) {
         setIsAutoRenewing(true);
         toast({ 
             title: "Auto-Renewal Triggered", 
@@ -201,8 +220,8 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
                 title: "Auto-Renewal Successful", 
                 description: `VPS ${vps.name} has been auto-renewed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` 
             });
-            onActionSuccess(); 
-            setIsRenewalAcknowledged(false); 
+            onActionSuccess(); // This will re-fetch data and update props
+            setIsRenewalAcknowledged(false); // Reset for the new cycle
           } else {
             toast({ 
                 title: "Auto-Renewal Failed", 
@@ -241,48 +260,48 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   );
   
   const canAcknowledgeRenewal = !isRenewalAcknowledged && (
-    ((typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0) ||
-    (typeof vps.daysToExpiry === 'string' && vps.daysToExpiry.toLowerCase() === 'expired')) &&
+    ((typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0) || // Nearing expiry
+    (vps.daysToExpiry === 'Expired')) && // Or already expired
     vps.note_billing_end_date !== null 
   );
 
+
   const handleAcknowledgeRenewalClick = (e: React.MouseEvent) => {
     e.stopPropagation(); 
-    setShowConfirmRenewDialog(true);
+    setShowConfirmAcknowledgeDialog(true);
   };
 
   const confirmAcknowledgeRenewal = () => {
     setIsRenewalAcknowledged(true);
     toast({ 
       title: "Renewal Acknowledged", 
-      description: `VPS ${vps.name} will be auto-renewed upon expiry (or immediately if already expired and acknowledged).` 
+      description: `VPS ${vps.name} will be auto-renewed upon expiry if applicable.` 
     });
-    setShowConfirmRenewDialog(false);
+    setShowConfirmAcknowledgeDialog(false);
   };
 
   const { totalDaysInCycle } = getCycleDetails(vps.note_billing_end_date, vps.billingCycle);
   
-  let daysToDisplayForBar: number | string = vps.daysToExpiry;
+  let daysRemainingForBar = vps.daysToExpiry;
   let progressBarPercentage = 0;
-  let progressIndicatorColorClass = "bg-primary"; 
+  let progressIndicatorColorClass = "bg-muted"; 
 
-  if (typeof daysToDisplayForBar === 'number') {
-    const actualDaysLeftForBar = Math.max(0, daysToDisplayForBar);
+  if (typeof daysRemainingForBar === 'number') {
+    const actualDaysLeftForBar = Math.max(0, daysRemainingForBar);
     progressBarPercentage = (totalDaysInCycle > 0)
         ? Math.min(100, Math.max(0, (actualDaysLeftForBar / totalDaysInCycle) * 100))
         : (actualDaysLeftForBar > 0 ? 100 : 0);
 
-
-    if (daysToDisplayForBar < 0) { 
-      progressIndicatorColorClass = "bg-muted"; 
-    } else if (daysToDisplayForBar <= 7) { 
+    if (daysRemainingForBar < 0) { 
+      progressIndicatorColorClass = "bg-destructive"; // Expired
+    } else if (daysRemainingForBar <= 7) { 
       progressIndicatorColorClass = "bg-red-500";
-    } else if (daysToDisplayForBar <= 15) { 
+    } else if (daysRemainingForBar <= 15) { 
       progressIndicatorColorClass = "bg-orange-500";
     } else { 
       progressIndicatorColorClass = "bg-green-500";
     }
-  } else if (typeof daysToDisplayForBar === 'string' && daysToDisplayForBar.toLowerCase() === 'expired') {
+  } else if (typeof daysRemainingForBar === 'string' && daysRemainingForBar.toLowerCase() === 'expired') {
       progressBarPercentage = 0;
       progressIndicatorColorClass = "bg-destructive"; 
   } else { 
@@ -325,7 +344,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
         <TableCell className="p-2 text-sm whitespace-nowrap">{vps.uptime}</TableCell>
         <TableCell className="p-2 text-sm whitespace-nowrap">
           <div className="flex items-center gap-1.5 min-w-[150px] sm:min-w-[180px] justify-start">
-            {(vps.note_billing_end_date && totalDaysInCycle > 0) || (typeof vps.daysToExpiry === 'string' && (vps.daysToExpiry.toLowerCase() === 'expired' || vps.daysToExpiry.toLowerCase() === 'n/a')) ? (
+            {(vps.note_billing_end_date && totalDaysInCycle >= 0) || (typeof vps.daysToExpiry === 'string') ? (
               <>
                 <UsageBar 
                   percentage={progressBarPercentage} 
@@ -343,7 +362,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
             )}
             
             {isRenewalAcknowledged ? (
-                <CheckCircle2Icon className="h-5 w-5 text-green-500 shrink-0" title={`Renewal acknowledged. Auto-renewal triggered or will trigger upon expiry.`} />
+                <CheckCircle2Icon className="h-5 w-5 text-green-500 shrink-0" title={`Renewal acknowledged. Auto-renewal will trigger upon expiry if applicable.`} />
             ) : canAcknowledgeRenewal ? ( 
               <Button 
                 variant="outline" 
@@ -432,13 +451,13 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
         </TableRow>
       )}
 
-      <AlertDialog open={showConfirmRenewDialog} onOpenChange={setShowConfirmRenewDialog}>
+      <AlertDialog open={showConfirmAcknowledgeDialog} onOpenChange={setShowConfirmAcknowledgeDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Acknowledge Renewal</AlertDialogTitle>
+            <AlertDialogTitle>Acknowledge Renewal Reminder</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to acknowledge the renewal for VPS: {vps.name}?
-              This will enable auto-renewal when it expires.
+              Are you sure you want to acknowledge the renewal reminder for VPS: {vps.name}?
+              If acknowledged, the system will attempt to auto-renew this VPS when it expires.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
