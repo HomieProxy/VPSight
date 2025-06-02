@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { renewVpsInstance } from '@/app/admin/actions'; // Assuming actions are accessible
+import { renewVpsInstance } from '@/app/admin/actions';
 import { 
   ComputerIcon, 
   GlobeIcon, 
@@ -28,35 +28,49 @@ import {
   ChevronRightIcon,
   ServerOffIcon,
   RefreshCcwIcon,
-  Loader2Icon
+  Loader2Icon,
+  InfoIcon,
+  CpuIcon as CpuIconLucide, // Renamed to avoid conflict
+  DatabaseIcon,
+  HardDriveIcon,
+  MemoryStickIcon as MemoryStickIconLucide, // Renamed
+  NetworkIcon,
+  PowerIcon,
+  RadioTowerIcon,
+  ActivityIcon,
+  TagIcon,
+  DollarSignIcon,
+  CalendarIcon,
+  ReplaceIcon,
+  FileClockIcon
 } from 'lucide-react';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, formatDistanceToNowStrict } from 'date-fns';
 
 interface VpsTableRowProps {
   vps: VpsData;
   onActionSuccess: () => void;
 }
 
-const formatFullDate = (isoString: string | null | undefined): string => {
+const formatDetailDate = (isoString: string | null | undefined): string => {
   if (!isoString) return 'N/A';
   try {
     const date = parseISO(isoString);
     if (!isValid(date)) return 'N/A';
-    return format(date, 'M/d/yyyy, h:mm:ss a');
+    return format(date, 'Pppp'); // e.g., 01/15/2025, 4:07:36 PM
   } catch (e) {
-    console.error("Error formatting date:", isoString, e);
+    console.error("Error formatting detail date:", isoString, e);
     return 'Invalid Date';
   }
 };
 
-const formatBillingDate = (isoString: string | null | undefined): string => {
-  if (!isoString) return 'N/A';
+const formatBillingDateShort = (isoString: string | null | undefined): string => {
+  if (!isoString) return '';
   try {
     const date = parseISO(isoString);
-    if (!isValid(date)) return 'N/A';
+    if (!isValid(date)) return '';
     return format(date, 'yyyy-MM-dd');
   } catch (e) {
-    return 'Invalid Date';
+    return '';
   }
 };
 
@@ -68,15 +82,16 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
 
   const formatDaysToExpiry = (days: number | string) => {
     if (typeof days === 'string') return days; 
-    if (days < 0) return 'Expired';
+    if (days < 0) return 'Expired'; // Should be caught by API, but good fallback
     if (days === 0) return 'Today';
     return `${days}d`;
   };
   
-  const DetailItem: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-    <div className="flex items-start py-0.5">
-      <span className="font-semibold w-32 shrink-0 text-muted-foreground">{label}:</span>
-      <span className="flex-1 break-words">{children}</span>
+  const DetailItem: React.FC<{ icon?: React.ReactNode; label: string; children: React.ReactNode; className?: string }> = ({ icon, label, children, className }) => (
+    <div className={cn("flex items-start py-0.5 text-xs", className)}>
+      {icon && <span className="mr-2 mt-px text-muted-foreground">{icon}</span>}
+      <span className="font-medium w-28 shrink-0 text-muted-foreground">{label}:</span>
+      <span className="flex-1 break-words text-foreground">{children}</span>
     </div>
   );
 
@@ -88,8 +103,8 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     try {
       const result = await renewVpsInstance(parseInt(vps.id, 10));
       if (result.success) {
-        toast({ title: "Success", description: `VPS ${vps.name} renewed. New expiry: ${result.data?.newEndDate}` });
-        onActionSuccess(); // Refresh the list
+        toast({ title: "Success", description: `VPS ${vps.name} renewed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` });
+        onActionSuccess(); 
       } else {
         toast({ title: "Error", description: result.error || "Failed to renew VPS.", variant: "destructive" });
       }
@@ -101,23 +116,25 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     }
   };
 
+  const billingEndDateFormatted = formatBillingDateShort(vps.note_billing_end_date);
+
   return (
     <>
       <TableRow 
-        className="hover:bg-muted/20 cursor-pointer"
+        className="hover:bg-muted/20 cursor-pointer border-b border-border/50"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <TableCell className="p-2 text-center w-16">
+        <TableCell className="p-2 text-center w-12">
           <StatusIndicator status={vps.status} />
         </TableCell>
         <TableCell className="p-2 font-medium text-sm whitespace-nowrap">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-muted-foreground" /> : <ChevronRightIcon className="h-4 w-4 text-muted-foreground" />}
             {vps.name}
           </div>
         </TableCell>
-        <TableCell className="p-2 text-sm whitespace-nowrap">
-          <div className="flex items-center gap-1">
+        <TableCell className="p-2 text-sm whitespace-nowrap min-w-[120px]">
+          <div className="flex items-center gap-1.5">
             {vps.system === 'Unknown OS' ? 
               <ServerOffIcon className="h-4 w-4 text-destructive" title="System Unknown / Agent Offline"/> : 
               <> <ComputerIcon className="h-4 w-4 text-muted-foreground" /> {vps.system.split('[')[0].trim()} </>
@@ -125,7 +142,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
           </div>
         </TableCell>
         <TableCell className="p-2 text-sm whitespace-nowrap">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <GlobeIcon className="h-4 w-4 text-muted-foreground" />
             {vps.location}
           </div>
@@ -134,7 +151,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
         <TableCell className="p-2 text-sm whitespace-nowrap">{vps.uptime}</TableCell>
         <TableCell className="p-2 text-sm whitespace-nowrap">
           <div className="flex items-center gap-1 min-w-[150px] justify-between">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <CalendarClockIcon className="h-4 w-4 text-muted-foreground" />
               {formatDaysToExpiry(vps.daysToExpiry)}
             </div>
@@ -142,87 +159,86 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="h-6 px-2 py-0 text-xs"
+                className="h-6 px-1.5 py-0 text-xs"
                 onClick={(e) => { e.stopPropagation(); setIsRenewDialogOpen(true); }}
                 disabled={isRenewing}
+                title="Renew Subscription"
               >
                 {isRenewing ? <Loader2Icon className="h-3 w-3 animate-spin" /> : <RefreshCcwIcon className="h-3 w-3"/>}
-                <span className="ml-1">Renew</span>
+                <span className="ml-1 hidden sm:inline">Renew</span>
               </Button>
             )}
           </div>
         </TableCell>
-        <TableCell className="p-2 text-sm text-center whitespace-nowrap">{vps.load.toFixed(2)}</TableCell>
-        <TableCell className="p-2 text-sm whitespace-nowrap">
+        <TableCell className="p-2 text-sm text-center whitespace-nowrap">{typeof vps.load === 'number' ? vps.load.toFixed(2) : 'N/A'}</TableCell>
+        <TableCell className="p-2 text-sm whitespace-nowrap min-w-[120px]">
           <div className="flex items-center gap-1">
             <ArrowDownIcon className="h-3 w-3 text-green-500" /> {vps.nicDown}
-            <span className="text-muted-foreground mx-1">|</span>
+            <span className="text-muted-foreground mx-0.5">|</span>
             <ArrowUpIcon className="h-3 w-3 text-red-500" /> {vps.nicUp}
           </div>
         </TableCell>
-        <TableCell className="p-2 text-sm whitespace-nowrap">
+        <TableCell className="p-2 text-sm whitespace-nowrap min-w-[120px]">
           <div className="flex items-center gap-1">
             <ArrowDownIcon className="h-3 w-3 text-green-500" /> {vps.network.currentMonthIn}
-            <span className="text-muted-foreground mx-1">|</span>
+            <span className="text-muted-foreground mx-0.5">|</span>
             <ArrowUpIcon className="h-3 w-3 text-red-500" /> {vps.network.currentMonthOut}
           </div>
         </TableCell>
-        <TableCell className="p-2 w-24 min-w-[96px]">
+        <TableCell className="p-2 w-20 min-w-[80px]">
           <UsageBar percentage={vps.cpu.usage} />
         </TableCell>
-        <TableCell className="p-2 w-24 min-w-[96px]">
+        <TableCell className="p-2 w-20 min-w-[80px]">
           <UsageBar percentage={vps.ram.percentage} />
         </TableCell>
-        <TableCell className="p-2 w-24 min-w-[96px]">
+        <TableCell className="p-2 w-20 min-w-[80px]">
           <UsageBar percentage={vps.disk.percentage} />
         </TableCell>
       </TableRow>
       {isExpanded && (
-        <TableRow className="bg-muted/5 hover:bg-muted/10">
+        <TableRow className="bg-muted/5 hover:bg-muted/10 border-b border-border/50">
           <TableCell colSpan={13} className="p-0">
-            <div className="p-3 text-xs">
-              <div className="space-y-1">
-                <DetailItem label="Plan">
-                  {vps.price}
-                  {vps.billingCycle && vps.billingCycle !== 'N/A' ? ` (${vps.billingCycle})` : ''}
-                  {vps.note_billing_end_date ? ` - Expires: ${formatBillingDate(vps.note_billing_end_date)}` : (vps.daysToExpiry !== 'N/A' ? ` - ${formatDaysToExpiry(vps.daysToExpiry)}` : '')}
-                  {vps.planBandwidth && vps.planBandwidth !== 'N/A' ? ` - ${vps.planBandwidth}` : ''}
-                  {vps.planTrafficType && vps.planTrafficType !== 'N/A' ? ` - ${vps.planTrafficType}` : ''}
-                  {vps.ip_address ? ` - ${vps.ip_address}` : ''}
+            <div className="p-3 space-y-1">
+              <DetailItem icon={<DollarSignIcon size={14}/>} label="Plan">
+                {vps.price || 'N/A'}
+                {vps.billingCycle && vps.billingCycle !== 'N/A' ? ` (${vps.billingCycle})` : ''}
+                {billingEndDateFormatted ? ` - Expires: ${billingEndDateFormatted}` : (vps.daysToExpiry !== 'N/A' ? ` - ${formatDaysToExpiry(vps.daysToExpiry)}` : '')}
+                {vps.planBandwidth && vps.planBandwidth !== 'N/A' ? ` - BW: ${vps.planBandwidth}` : ''}
+                {vps.planTrafficType && vps.planTrafficType !== 'N/A' ? ` - Traffic: ${vps.planTrafficType}` : ''}
+                {vps.ip_address ? ` - IP: ${vps.ip_address}` : ''}
+              </DetailItem>
+              <DetailItem icon={<ComputerIcon size={14}/>} label="System">{vps.system}</DetailItem>
+              <DetailItem icon={<CpuIconLucide size={14}/>} label="CPU">
+                {vps.cpu.model || 'N/A'} {vps.cpu.cores > 0 ? ` (${vps.cpu.cores} Cores)` : ''} (Usage: {vps.cpu.usage.toFixed(2)}%)
+              </DetailItem>
+              <DetailItem icon={<HardDriveIcon size={14}/>} label="Disk">
+                {vps.disk.used} / {vps.disk.total} ({vps.disk.percentage.toFixed(2)}%)
+              </DetailItem>
+              <DetailItem icon={<MemoryStickIconLucide size={14}/>} label="RAM">
+                {vps.ram.used} / {vps.ram.total} ({vps.ram.percentage.toFixed(2)}%)
+              </DetailItem>
+              {vps.swap.status === 'OFF' ? (
+                <DetailItem icon={<ReplaceIcon size={14}/>} label="Swap">OFF</DetailItem>
+              ) : (
+                <DetailItem icon={<ReplaceIcon size={14}/>} label="Swap">
+                  {vps.swap.used || '0 MB'} / {vps.swap.total || '0 MB'} 
+                  {vps.swap.percentage !== undefined && vps.swap.percentage !== null ? ` (${vps.swap.percentage.toFixed(2)}%)` : ''}
                 </DetailItem>
-                <DetailItem label="System">{vps.system}</DetailItem>
-                <DetailItem label="CPU">
-                  {vps.cpu.model} {vps.cpu.cores > 0 ? ` ${vps.cpu.cores} Virtual Core(s)` : ''} ({vps.cpu.usage.toFixed(2)}%)
-                </DetailItem>
-                <DetailItem label="Disk">
-                  {vps.disk.used} / {vps.disk.total} ({vps.disk.percentage.toFixed(2)}%)
-                </DetailItem>
-                <DetailItem label="RAM">
-                  {vps.ram.used} / {vps.ram.total} ({vps.ram.percentage.toFixed(2)}%)
-                </DetailItem>
-                {vps.swap.status === 'OFF' ? (
-                  <DetailItem label="Swap">OFF</DetailItem>
-                ) : (
-                  <DetailItem label="Swap">
-                    {vps.swap.used || '0 MB'} / {vps.swap.total || '0 MB'} 
-                    {vps.swap.percentage !== undefined ? ` (${vps.swap.percentage.toFixed(2)}%)` : ''}
-                  </DetailItem>
-                )}
-                <DetailItem label="Usage (Total)">
-                  IN {vps.network.totalIn} / OUT {vps.network.totalOut}
-                </DetailItem>
-                <DetailItem label="Load Avg">
-                  {vps.loadAverage.map(l => l.toFixed(2)).join(' / ')}
-                </DetailItem>
-                <DetailItem label="Processes">{vps.processCount}</DetailItem>
-                <DetailItem label="Connections">
-                  TCP {vps.connections.tcp} / UDP {vps.connections.udp}
-                </DetailItem>
-                <DetailItem label="Boot Time">{formatFullDate(vps.bootTime)}</DetailItem>
-                <DetailItem label="Last Active">{formatFullDate(vps.lastActive)}</DetailItem>
-                <DetailItem label="Uptime">{vps.uptime}</DetailItem>
-                <DetailItem label="Agent Ver">{vps.agentVersion || 'N/A'}</DetailItem>
-              </div>
+              )}
+              <DetailItem icon={<NetworkIcon size={14}/>} label="Usage (Total)">
+                IN: {vps.network.totalIn} / OUT: {vps.network.totalOut}
+              </DetailItem>
+              <DetailItem icon={<ActivityIcon size={14}/>} label="Load Avg">
+                {Array.isArray(vps.loadAverage) ? vps.loadAverage.map(l => typeof l === 'number' ? l.toFixed(2) : 'N/A').join(' / ') : 'N/A'}
+              </DetailItem>
+              <DetailItem icon={<InfoIcon size={14}/>} label="Processes">{typeof vps.processCount === 'number' ? vps.processCount : 'N/A'}</DetailItem>
+              <DetailItem icon={<RadioTowerIcon size={14}/>} label="Connections">
+                TCP: {typeof vps.connections?.tcp === 'number' ? vps.connections.tcp : 'N/A'} / UDP: {typeof vps.connections?.udp === 'number' ? vps.connections.udp : 'N/A'}
+              </DetailItem>
+              <DetailItem icon={<PowerIcon size={14}/>} label="Boot Time">{formatDetailDate(vps.bootTime)}</DetailItem>
+              <DetailItem icon={<FileClockIcon size={14}/>} label="Last Active">{formatDetailDate(vps.lastActive)}</DetailItem>
+              <DetailItem icon={<CalendarIcon size={14}/>} label="Uptime">{vps.uptime}</DetailItem>
+              <DetailItem icon={<TagIcon size={14}/>} label="Agent Ver">{vps.agentVersion || 'N/A'}</DetailItem>
             </div>
           </TableCell>
         </TableRow>
@@ -234,10 +250,11 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
             <AlertDialogDescription>
               Are you sure you want to renew the subscription for VPS: <strong>{vps?.name}</strong>?
               This will extend the billing end date based on its current cycle: <strong>{vps?.billingCycle || 'N/A'}</strong>.
+              Current expiry: {billingEndDateFormatted || formatDaysToExpiry(vps.daysToExpiry)}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isRenewing}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setIsRenewing(false)} disabled={isRenewing}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleRenew} disabled={isRenewing} className="bg-primary hover:bg-primary/90">
               {isRenewing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
               {isRenewing ? 'Renewing...' : 'Confirm Renew'}
@@ -251,12 +268,13 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
 
 export function VpsTableSkeletonRow() {
   return (
-    <TableRow>
-      {[...Array(13)].map((_, i) => (
-        <TableCell key={i} className="p-2">
-          <div className="h-5 bg-muted rounded animate-pulse" style={{ width: i === 1 ? '120px' : i === 6 ? '130px' : i > 9 ? '80px' : '60px' }} />
+    <TableRow className="border-b border-border/50">
+      {[...Array(13)].map((_, i) => ( // Adjusted for 13 columns
+        <TableCell key={i} className="p-2 h-[41px]"> {/* Matched height of VpsTableRow cell */}
+          <div className="h-5 bg-muted rounded animate-pulse" style={{ width: i === 1 ? '120px' : i === 6 ? '130px' : (i >= 10 && i <=12) ? '60px' : '50px' }} />
         </TableCell>
       ))}
     </TableRow>
   );
 }
+
