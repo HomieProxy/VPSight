@@ -4,23 +4,22 @@ export interface VpsData {
   name: string;
   status: 'online' | 'offline' | 'error';
   system: string;
-  countryRegion: string; // Replaces 'location', maps to country_region from admin form/DB
-  price: string; 
-  uptime: string; 
-  load: number; 
+  countryRegion: string;
+  price: string;
+  uptime: string;
+  load: number;
   nicDown: string;
-  nicUp: string; 
-  usageDown: string; 
-  usageUp: string; 
+  nicUp: string;
+  // usageDown and usageUp are replaced by network.currentMonthIn/Out for the "Usage" column
   cpu: {
     model: string;
     cores: number;
-    usage: number; 
+    usage: number;
   };
   disk: {
     used: string;
     total: string;
-    percentage: number; 
+    percentage: number;
   };
   ram: {
     used: string;
@@ -33,7 +32,7 @@ export interface VpsData {
     total?: string;
     percentage?: number;
   };
-  network: { 
+  network: {
     totalIn: string;
     totalOut: string;
     currentMonthIn: string;
@@ -47,4 +46,6 @@ export interface VpsData {
   };
   bootTime: string;
   lastActive: string;
+  daysToExpiry: number | string; // New field
 }
+
