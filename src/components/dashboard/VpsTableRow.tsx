@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { VpsData } from '@/types/vps-data';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { StatusIndicator } from './StatusIndicator';
-import { UsageBar } from './UsageBar'; // Updated import
+import { UsageBar } from './UsageBar';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { renewVpsInstance } from '@/app/admin/actions';
@@ -87,13 +87,10 @@ const getCycleDetails = (
       const monthsMatch = c.match(/(\d+)/);
       const numMonths = monthsMatch ? parseInt(monthsMatch[1], 10) : 1;
       startDate = addMonths(endDate, -numMonths);
-      // For single month cycles, get actual days in that month
       if (numMonths === 1) {
-         // To correctly get days in the *start* month of the cycle:
          const tempStartDateForMonthCalc = addMonths(endDate, -1);
          return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: getDaysInMonth(tempStartDateForMonthCalc) };
       }
-      // For multi-month cycles, a direct difference is fine
       return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: differenceInDays(endDate, startDate) };
 
     } else if (c.includes('year') || c.includes('annu')) {
@@ -103,39 +100,35 @@ const getCycleDetails = (
       startDate = addYears(endDate, -numYears);
     } else if (c.includes('quarter')) {
       startDate = addMonths(endDate, -3);
-    } else { // Assuming days if not month/year/quarter
+    } else { 
       const daysMatch = c.match(/^(\d+)\s*days?$/);
       if (daysMatch) {
         const numDays = parseInt(daysMatch[1], 10);
         startDate = addDays(endDate, -numDays);
         return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: numDays };
       } else {
-         // Fallback for simple number if no unit, assume days
          const justDaysNumberMatch = c.match(/^(\d+)$/);
          if (justDaysNumberMatch) {
             const numDays = parseInt(justDaysNumberMatch[1], 10);
             startDate = addDays(endDate, -numDays);
             return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: numDays };
          } else {
-            // Default to 30 if cycle is unparseable but end date is valid
             startDate = addDays(endDate, -30); 
             const totalDays = differenceInDays(endDate, startDate);
             return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: totalDays > 0 ? totalDays : 30 };
          }
       }
     }
-    // For yearly/quarterly or other non-day specific parsed cycles
     const totalDays = differenceInDays(endDate, startDate);
     return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: totalDays > 0 ? totalDays : 0 };
   } catch (e) {
     console.error("Error in getCycleDetails for endDate:", endDateISO, "cycle:", cycleString, e);
-    // Fallback if error during parsing, assuming 30 days if end date is valid
     if (endDateISO && isValid(parseISO(endDateISO))) {
         const endDate = parseISO(endDateISO);
-        const startDate = addDays(endDate, -30); // Default to a 30-day cycle on error
+        const startDate = addDays(endDate, -30); 
         return { startDateISO: formatISO(startDate, {representation: 'date'}), totalDaysInCycle: 30};
     }
-    return { startDateISO: null, totalDaysInCycle: 0 }; // Ultimate fallback
+    return { startDateISO: null, totalDaysInCycle: 0 }; 
   }
 };
 
@@ -165,29 +158,21 @@ const getCountryFlagEmoji = (locationString: string | null | undefined): string 
     'SWITZERLAND': '🇨🇭', 'CH': '🇨🇭',
     'NORWAY': '🇳🇴', 'NO': '🇳🇴',
     'HONG KONG': '🇭🇰', 'HK': '🇭🇰',
-    // Add more as needed
   };
 
-  // 1. Exact match for the whole string
   if (flagMap[upperLocation]) {
     return flagMap[upperLocation];
   }
 
-  // 2. Check if any key (longest first) is part of the location string (whole word/phrase)
   const sortedKeys = Object.keys(flagMap).sort((a, b) => b.length - a.length);
   for (const key of sortedKeys) {
-    // Escape special regex characters in the key
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`\\b${escapedKey}\\b`); // \b for word boundaries
+    const regex = new RegExp(`\\b${escapedKey}\\b`); 
     if (regex.test(upperLocation)) {
       return flagMap[key];
     }
   }
   
-  // 3. Fallback: check parts of the location string (e.g., "New York, US" -> "US")
-  // This is less precise and can lead to errors if not careful (e.g. "US" in "RUSSIA")
-  // The word boundary check above should handle most cases better.
-  // For a simpler fallback, we can check individual words.
   const normalizedParts = upperLocation.replace(/[\/\-\,\.]/g, ' ').split(' ').filter(part => part.length > 0);
   for (const part of normalizedParts) {
     if (flagMap[part]) {
@@ -212,10 +197,9 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   const [isAutoRenewing, setIsAutoRenewing] = useState(false);
   const [showConfirmAcknowledgeDialog, setShowConfirmAcknowledgeDialog] = useState(false);
 
-  // Reset acknowledgment state if VPS ID changes (e.g., list reorders or new data)
   useEffect(() => {
     setIsRenewalAcknowledged(false);
-    setIsAutoRenewing(false); // Also reset auto-renewing attempt status
+    setIsAutoRenewing(false);
   }, [vps.id]);
 
 
@@ -237,8 +221,8 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
               title: "Auto-Renewal Successful", 
               description: `VPS ${vps.name} has been auto-renewed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` 
           });
-          onActionSuccess(); // This will re-fetch data, updating props
-          setIsRenewalAcknowledged(false); // Reset for the new cycle
+          onActionSuccess(); 
+          setIsRenewalAcknowledged(false); 
         } else {
           toast({ 
               title: "Auto-Renewal Failed", 
@@ -258,14 +242,13 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     }
   }, [vps.daysToExpiry, vps.id, vps.name, isRenewalAcknowledged, isAutoRenewing, onActionSuccess, toast]);
 
-  // Effect to trigger auto-renewal when conditions are met
   useEffect(() => {
     performAutoRenewal();
   }, [performAutoRenewal, vps.daysToExpiry, isRenewalAcknowledged]);
 
 
   const formatDaysToExpiryText = (days: number | string): string => {
-    if (typeof days === 'string') return days; // "Expired", "N/A"
+    if (typeof days === 'string') return days; 
     if (days < 0) return 'Expired';
     if (days === 0) return 'Expires Today';
     return `${days}d`;
@@ -279,15 +262,14 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     </div>
   );
   
-  // Button is visible if within 15 days (or expired) AND not yet acknowledged in this session
   const canAcknowledgeRenewal = !isRenewalAcknowledged && (
     ((typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0) || 
     (vps.daysToExpiry === 'Expired')) && 
-    vps.note_billing_end_date !== null // Ensure there's an end date to renew from
+    vps.note_billing_end_date !== null 
   );
 
   const handleAcknowledgeRenewalClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent row expansion if button is inside the row
+    e.stopPropagation(); 
     setShowConfirmAcknowledgeDialog(true);
   };
 
@@ -298,38 +280,33 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
       description: `VPS ${vps.name} will be auto-renewed upon expiry if applicable.` 
     });
     setShowConfirmAcknowledgeDialog(false);
-    // If already expired, try to trigger auto-renewal check immediately after acknowledgment
-    if (vps.daysToExpiry === 'Expired' || (typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <=0)) {
-        // The useEffect for performAutoRenewal will pick this up as isRenewalAcknowledged is now true
-    }
   };
 
   const { totalDaysInCycle } = getCycleDetails(vps.note_billing_end_date, vps.billingCycle);
   
   let daysRemainingForBar = vps.daysToExpiry;
   let progressBarPercentage = 0;
-  let progressIndicatorColorClass = "bg-muted"; // Default for N/A or unparseable
+  let progressIndicatorColorClass = "bg-muted";
 
   if (typeof daysRemainingForBar === 'number') {
     const actualDaysLeftForBar = Math.max(0, daysRemainingForBar); 
     progressBarPercentage = (totalDaysInCycle > 0)
         ? Math.min(100, Math.max(0, (actualDaysLeftForBar / totalDaysInCycle) * 100))
-        : (actualDaysLeftForBar > 0 ? 100 : 0); // If cycle is 0, show 100% if days left, else 0
+        : (actualDaysLeftForBar > 0 ? 100 : 0); 
 
-    if (daysRemainingForBar < 0) { // Expired
+    if (daysRemainingForBar < 0) { 
       progressIndicatorColorClass = "bg-red-500"; 
-    } else if (daysRemainingForBar <= 7) { // Critical: 0-7 days
-      progressIndicatorColorClass = "bg-orange-500"; // Changed to orange for critical
-    } else if (daysRemainingForBar <= 15) { // Warning: 8-15 days
-      progressIndicatorColorClass = "bg-yellow-500"; // Yellow for warning
-    } else { // Safe: > 15 days
-      progressIndicatorColorClass = "bg-green-500"; // Green for safe
+    } else if (daysRemainingForBar <= 7) { 
+      progressIndicatorColorClass = "bg-orange-500"; 
+    } else if (daysRemainingForBar <= 15) { 
+      progressIndicatorColorClass = "bg-yellow-500"; 
+    } else { 
+      progressIndicatorColorClass = "bg-green-500"; 
     }
   } else if (typeof daysRemainingForBar === 'string' && daysRemainingForBar.toLowerCase() === 'expired') {
-      progressBarPercentage = 0; // Expired means 0% remaining of the cycle
-      progressIndicatorColorClass = "bg-red-500"; // Red for expired
+      progressBarPercentage = 0; 
+      progressIndicatorColorClass = "bg-red-500"; 
   }
-  // For "N/A" or other strings, it remains muted with 0%
 
   const flagEmoji = getCountryFlagEmoji(vps.location);
 
@@ -361,9 +338,8 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
             {flagEmoji ? (
               <span
                 role="img"
-                aria-label={vps.location}
-                className="text-base leading-none"
-                style={{ fontFamily: 'sans-serif' }}
+                aria-label={vps.location} // Provides context for screen readers
+                className="text-base leading-none" // Basic styling for emoji
               >
                 {flagEmoji}
               </span>
@@ -381,14 +357,13 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
               <>
                 <UsageBar 
                   percentage={progressBarPercentage} 
-                  className="w-16 sm:w-20 h-3" // Maintained width
-                  barClassName={progressIndicatorColorClass} // Dynamic color
-                  showText={false} // Text will be shown separately
+                  className="w-16 sm:w-20 h-3" 
+                  barClassName={progressIndicatorColorClass} 
+                  showText={false} 
                 />
                 <span className="text-xs w-auto min-w-[30px] text-right">{formatDaysToExpiryText(vps.daysToExpiry)}</span>
               </>
             ) : (
-              // Fallback for no billing date or N/A expiry
               <span className="text-xs w-[100px] sm:w-[120px] flex items-center">
                 <CalendarDaysIcon className="h-4 w-4 text-muted-foreground mr-1 shrink-0" />
                 {formatDaysToExpiryText(vps.daysToExpiry)}
@@ -403,7 +378,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
                 size="sm" 
                 className="h-6 px-1.5 py-0 text-xs shrink-0"
                 onClick={handleAcknowledgeRenewalClick}
-                disabled={isAutoRenewing} // Disable if auto-renewal is in progress
+                disabled={isAutoRenewing} 
                 title="Acknowledge renewal reminder"
               >
                 {isAutoRenewing ? <Loader2Icon className="h-3 w-3 animate-spin" /> : <BellRingIcon className="h-3 w-3"/>}
@@ -510,20 +485,20 @@ export function VpsTableSkeletonRow() {
       {[...Array(13)].map((_, i) => (
         <TableCell key={i} className="p-2 h-[41px]">
           <div className="flex items-center h-full">
-            {i === 6 ? ( // Special handling for the "Remaining" column (index 6)
+            {i === 6 ? ( 
               <div className="flex items-center gap-1.5 min-w-[150px] sm:min-w-[180px]">
-                <div className="h-3 bg-muted rounded animate-pulse w-16 sm:w-20" /> {/* Skeleton for UsageBar */}
-                <div className="h-4 bg-muted rounded animate-pulse w-auto min-w-[30px]" /> {/* Skeleton for days text */}
-                <div className="h-5 bg-muted rounded animate-pulse w-5" /> {/* Skeleton for button/icon */}
+                <div className="h-3 bg-muted rounded animate-pulse w-16 sm:w-20" /> 
+                <div className="h-4 bg-muted rounded animate-pulse w-auto min-w-[30px]" /> 
+                <div className="h-5 bg-muted rounded animate-pulse w-5" /> 
               </div>
             ) : (
               <div className="h-5 bg-muted rounded animate-pulse" 
                    style={{ 
-                     width: i === 1 ? '120px' : // Name
-                            (i === 2 || i === 8 || i === 9) ? '100px' : // System, NIC, Usage
-                            (i === 3) ? '80px' : // Location
-                            (i >= 10 && i <=12) ? '60px' : // CPU, RAM, Disk
-                            '50px' // Default for ID, Price, Uptime, Load
+                     width: i === 1 ? '120px' : 
+                            (i === 2 || i === 8 || i === 9) ? '100px' : 
+                            (i === 3) ? '80px' : 
+                            (i >= 10 && i <=12) ? '60px' : 
+                            '50px' 
                    }} />
             )}
           </div>
@@ -535,3 +510,4 @@ export function VpsTableSkeletonRow() {
     
 
     
+
