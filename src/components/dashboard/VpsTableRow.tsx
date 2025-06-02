@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { VpsData } from '@/types/vps-data';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { StatusIndicator } from './StatusIndicator';
-import { UsageBar } from './UsageBar';
+import { UsageBar } from './UsageBar'; // Using UsageBar now
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { renewVpsInstance } from '@/app/admin/actions';
@@ -87,10 +87,13 @@ const getCycleDetails = (
       const monthsMatch = c.match(/(\d+)/);
       const numMonths = monthsMatch ? parseInt(monthsMatch[1], 10) : 1;
       startDate = addMonths(endDate, -numMonths);
+       // For a single month, get the days in that specific month
       if (numMonths === 1) {
          return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: getDaysInMonth(startDate) };
       }
+      // For multiple months, calculate difference
       return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: differenceInDays(endDate, startDate) };
+
     } else if (c.includes('year') || c.includes('annu')) {
       const yearsMatch = c.match(/(\d+)/);
       let numYears = yearsMatch ? parseInt(yearsMatch[1], 10) : 1;
@@ -99,10 +102,12 @@ const getCycleDetails = (
     } else if (c.includes('quarter')) {
       startDate = addMonths(endDate, -3);
     } else {
+      // Try to parse "X days" or just a number as days
       const daysMatch = c.match(/^(\d+)\s*days?$/);
       if (daysMatch) {
         startDate = addDays(endDate, -parseInt(daysMatch[1], 10));
       } else {
+         // If cycle is just a number, assume it's days
          const justDaysNumberMatch = c.match(/^(\d+)$/);
          if (justDaysNumberMatch) {
             startDate = addDays(endDate, -parseInt(justDaysNumberMatch[1], 10));
@@ -117,7 +122,13 @@ const getCycleDetails = (
     const totalDays = differenceInDays(endDate, startDate);
     return { startDateISO: formatISO(startDate, { representation: 'date' }), totalDaysInCycle: totalDays > 0 ? totalDays : 0 };
   } catch (e) {
-    console.error("Error in getCycleDetails:", e);
+    console.error("Error in getCycleDetails for endDate:", endDateISO, "cycle:", cycleString, e);
+    // Fallback for unparseable cycles: assume 30 days if end date is valid
+    if (endDateISO && isValid(parseISO(endDateISO))) {
+        const endDate = parseISO(endDateISO);
+        const startDate = addDays(endDate, -30);
+        return { startDateISO: formatISO(startDate, {representation: 'date'}), totalDaysInCycle: 30};
+    }
     return { startDateISO: null, totalDaysInCycle: 0 };
   }
 };
@@ -167,9 +178,7 @@ const getCountryFlagEmoji = (locationString: string | null | undefined): string 
     }
   }
 
-  // 3. If no direct or phrase match, split the location string and check parts (already covered by regex approach for single word keys)
-  // This part is effectively covered by the regex approach if keys like "US", "JP" are handled.
-  // However, keeping it as a fallback if the regex approach for single terms needs more specific handling.
+  // 3. If no direct or phrase match, split the location string and check parts
   const normalizedParts = upperLocation.replace(/[\/\-\,\.]/g, ' ').split(' ').filter(part => part.length > 0);
   for (const part of normalizedParts) {
     if (flagMap[part]) {
@@ -197,51 +206,52 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   // Reset acknowledgement state when the VPS ID changes
   useEffect(() => {
     setIsRenewalAcknowledged(false);
-    setIsAutoRenewing(false); // Also reset auto-renewing flag
+    setIsAutoRenewing(false); 
   }, [vps.id]);
 
-  // Effect to perform auto-renewal if acknowledged and expired
-  useEffect(() => {
-    const performAutoRenewal = async () => {
-      if (isAutoRenewing) return; 
+  const performAutoRenewal = useCallback(async () => {
+    if (isAutoRenewing) return;
 
-      const isExpiredOrDue = (typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 0) || vps.daysToExpiry === 'Expired';
+    const isExpiredOrDue = (typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 0) || vps.daysToExpiry === 'Expired';
 
-      if (isRenewalAcknowledged && isExpiredOrDue) {
-        setIsAutoRenewing(true);
-        toast({ 
-            title: "Auto-Renewal Triggered", 
-            description: `Attempting to auto-renew VPS: ${vps.name} (ID: ${vps.id}).` 
-        });
-        try {
-          const result = await renewVpsInstance(parseInt(vps.id, 10));
-          if (result.success) {
-            toast({ 
-                title: "Auto-Renewal Successful", 
-                description: `VPS ${vps.name} has been auto-renewed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` 
-            });
-            onActionSuccess(); // This will re-fetch data and update props
-            setIsRenewalAcknowledged(false); // Reset for the new cycle
-          } else {
-            toast({ 
-                title: "Auto-Renewal Failed", 
-                description: result.error || `Failed to auto-renew VPS ${vps.name}.`, 
-                variant: "destructive" 
-            });
-          }
-        } catch (error) {
+    if (isRenewalAcknowledged && isExpiredOrDue) {
+      setIsAutoRenewing(true);
+      toast({ 
+          title: "Auto-Renewal Triggered", 
+          description: `Attempting to auto-renew VPS: ${vps.name} (ID: ${vps.id}).` 
+      });
+      try {
+        const result = await renewVpsInstance(parseInt(vps.id, 10));
+        if (result.success) {
           toast({ 
-            title: "Auto-Renewal Error", 
-            description: `An unexpected error occurred during auto-renewal for VPS ${vps.name}.`, 
-            variant: "destructive" 
+              title: "Auto-Renewal Successful", 
+              description: `VPS ${vps.name} has been auto-renewed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` 
           });
-        } finally {
-          setIsAutoRenewing(false);
+          onActionSuccess(); 
+          setIsRenewalAcknowledged(false); 
+        } else {
+          toast({ 
+              title: "Auto-Renewal Failed", 
+              description: result.error || `Failed to auto-renew VPS ${vps.name}.`, 
+              variant: "destructive" 
+          });
         }
+      } catch (error) {
+        toast({ 
+          title: "Auto-Renewal Error", 
+          description: `An unexpected error occurred during auto-renewal for VPS ${vps.name}.`, 
+          variant: "destructive" 
+        });
+      } finally {
+        setIsAutoRenewing(false);
       }
-    };
+    }
+  }, [vps.daysToExpiry, vps.id, vps.name, isRenewalAcknowledged, isAutoRenewing, onActionSuccess, toast]);
+
+  // Effect to perform auto-renewal
+  useEffect(() => {
     performAutoRenewal();
-  }, [vps.daysToExpiry, isRenewalAcknowledged, vps.id, vps.name, onActionSuccess, toast, isAutoRenewing]);
+  }, [performAutoRenewal]);
 
 
   const formatDaysToExpiryText = (days: number | string): string => {
@@ -260,8 +270,8 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   );
   
   const canAcknowledgeRenewal = !isRenewalAcknowledged && (
-    ((typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0) || // Nearing expiry
-    (vps.daysToExpiry === 'Expired')) && // Or already expired
+    ((typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0) || 
+    (vps.daysToExpiry === 'Expired')) && 
     vps.note_billing_end_date !== null 
   );
 
@@ -278,6 +288,10 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
       description: `VPS ${vps.name} will be auto-renewed upon expiry if applicable.` 
     });
     setShowConfirmAcknowledgeDialog(false);
+    // Trigger auto-renewal check immediately after acknowledgment if expired
+    if (vps.daysToExpiry === 'Expired' || (typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <=0)) {
+        performAutoRenewal();
+    }
   };
 
   const { totalDaysInCycle } = getCycleDetails(vps.note_billing_end_date, vps.billingCycle);
@@ -287,25 +301,25 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   let progressIndicatorColorClass = "bg-muted"; 
 
   if (typeof daysRemainingForBar === 'number') {
-    const actualDaysLeftForBar = Math.max(0, daysRemainingForBar);
+    const actualDaysLeftForBar = Math.max(0, daysRemainingForBar); // Ensure bar doesn't go negative for display
     progressBarPercentage = (totalDaysInCycle > 0)
         ? Math.min(100, Math.max(0, (actualDaysLeftForBar / totalDaysInCycle) * 100))
-        : (actualDaysLeftForBar > 0 ? 100 : 0);
+        : (actualDaysLeftForBar > 0 ? 100 : 0); // If totalDaysInCycle is 0, show 100% if not expired, else 0%
 
     if (daysRemainingForBar < 0) { 
-      progressIndicatorColorClass = "bg-destructive"; // Expired
+      progressIndicatorColorClass = "bg-red-500"; // More distinct "expired" color
     } else if (daysRemainingForBar <= 7) { 
-      progressIndicatorColorClass = "bg-red-500";
+      progressIndicatorColorClass = "bg-orange-500"; // Keep orange for < 7 days
     } else if (daysRemainingForBar <= 15) { 
-      progressIndicatorColorClass = "bg-orange-500";
+      progressIndicatorColorClass = "bg-yellow-500"; // Yellow for 8-15 days
     } else { 
-      progressIndicatorColorClass = "bg-green-500";
+      progressIndicatorColorClass = "bg-green-500"; // Green for > 15 days
     }
   } else if (typeof daysRemainingForBar === 'string' && daysRemainingForBar.toLowerCase() === 'expired') {
-      progressBarPercentage = 0;
-      progressIndicatorColorClass = "bg-destructive"; 
-  } else { 
-      progressBarPercentage = 0; 
+      progressBarPercentage = 0; // Show 0% for "Expired" string
+      progressIndicatorColorClass = "bg-red-500"; 
+  } else { // N/A or other string
+      progressBarPercentage = 0; // Default to 0% if not a number or "Expired"
       progressIndicatorColorClass = "bg-muted"; 
   }
 
@@ -477,7 +491,7 @@ export function VpsTableSkeletonRow() {
         <TableCell key={i} className="p-2 h-[41px]">
           <div className="flex items-center h-full">
             {i === 6 ? ( 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-[150px] sm:min-w-[180px]">
                 <div className="h-3 bg-muted rounded animate-pulse w-16 sm:w-20" /> 
                 <div className="h-4 bg-muted rounded animate-pulse w-auto min-w-[30px]" />
                 <div className="h-5 bg-muted rounded animate-pulse w-5" />
