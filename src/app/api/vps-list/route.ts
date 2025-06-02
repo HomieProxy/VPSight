@@ -5,6 +5,16 @@ import type { VpsAdminEntry } from '@/app/admin/definitions';
 import type { VpsData } from '@/types/vps-data';
 import { differenceInDays, parseISO, isFuture, isValid } from 'date-fns';
 
+function mapTrafficType(type: number | null | undefined): string {
+  if (type === null || type === undefined) return 'N/A';
+  switch (type) {
+    case 0: return 'Both';
+    case 1: return 'Outbound only';
+    case 2: return 'Inbound only';
+    default: return 'N/A';
+  }
+}
+
 export async function GET() {
   try {
     const adminEntries: VpsAdminEntry[] = db.prepare(
@@ -33,15 +43,16 @@ export async function GET() {
       return {
         id: entry.id.toString(),
         name: entry.name,
-        status: 'offline', // Default to offline; will show as red. Agent should update this.
-        system: entry.type || 'Unknown OS',
-        countryRegion: entry.country_region || 'N/A',
-        price: entry.note_billing_amount || 'N/A', // Correctly mapped
+        // Simplified status: if IP exists, assume online for now. Agent should update this.
+        status: entry.ip_address ? 'online' : 'offline', 
+        system: entry.type || 'Unknown OS', // Keep original type as system
+        location: entry.country_region || 'N/A', // Mapped country_region to location
+        ip_address: entry.ip_address || null,
+        price: entry.note_billing_amount || 'N/A',
         uptime: 'N/A', // Placeholder
         load: 0, // Placeholder
         nicDown: '0 KB/s', // Placeholder
         nicUp: '0 KB/s', // Placeholder
-        // usageDown & usageUp removed from VpsData, use network.currentMonthIn/Out for the "Usage" column
         cpu: {
           model: 'N/A', // Placeholder
           cores: 0, // Placeholder
@@ -62,10 +73,10 @@ export async function GET() {
           percentage: 0,
         },
         network: {
-          totalIn: '0 GB', // Placeholder
-          totalOut: '0 GB', // Placeholder
-          currentMonthIn: '0 GB', // Placeholder, agent should update
-          currentMonthOut: '0 GB', // Placeholder, agent should update
+          totalIn: '0 GB', // Placeholder for total, agent should update
+          totalOut: '0 GB', // Placeholder for total, agent should update
+          currentMonthIn: '0 GB', // Placeholder for current period, agent should update
+          currentMonthOut: '0 GB', // Placeholder for current period, agent should update
         },
         loadAverage: [0, 0, 0], // Placeholder
         processCount: 0, // Placeholder
@@ -75,7 +86,13 @@ export async function GET() {
         },
         bootTime: entry.created_at, // Use created_at as a stand-in for now
         lastActive: entry.created_at, // Use created_at as a stand-in for now
-        daysToExpiry: daysToExpiry, // Calculated field
+        daysToExpiry: daysToExpiry,
+        
+        // Additional details from notes
+        billingCycle: entry.note_billing_cycle || 'N/A',
+        planBandwidth: entry.note_plan_bandwidth || 'N/A',
+        planTrafficType: mapTrafficType(entry.note_plan_traffic_type),
+        agentVersion: entry.agent_version || 'N/A',
       };
     });
 
@@ -85,4 +102,3 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch VPS data' }, { status: 500 });
   }
 }
-

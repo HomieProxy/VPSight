@@ -5,6 +5,7 @@ import type { VpsData } from '@/types/vps-data';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { VpsTableRow, VpsTableSkeletonRow } from './VpsTableRow';
 import { ServerOffIcon } from 'lucide-react';
+import React from 'react';
 
 interface VpsTableProps {
   vpsList: VpsData[] | null;
@@ -20,13 +21,13 @@ export function VpsTable({ vpsList, isLoading }: VpsTableProps) {
           */}<TableHead className="p-2 text-center w-16">Status</TableHead>{/*
           */}<TableHead className="p-2">Name</TableHead>{/*
           */}<TableHead className="p-2">System</TableHead>{/*
-          */}<TableHead className="p-2">Country/Region</TableHead>{/*
+          */}<TableHead className="p-2">Location</TableHead>{/* Changed from Country/Region */}{/*
           */}<TableHead className="p-2">Price</TableHead>{/*
           */}<TableHead className="p-2">Uptime</TableHead>{/*
-          */}<TableHead className="p-2">Expires In</TableHead>{/* New Column */}{/*
+          */}<TableHead className="p-2">Remaining</TableHead>{/* Changed from Expires In */}{/*
           */}<TableHead className="p-2 text-center">Load</TableHead>{/*
           */}<TableHead className="p-2 whitespace-nowrap">NIC ↓ | ↑</TableHead>{/*
-          */}<TableHead className="p-2 whitespace-nowrap">Usage (Month) ↓ | ↑</TableHead>{/* Updated Label */}{/*
+          */}<TableHead className="p-2 whitespace-nowrap">Usage ↓ | ↑</TableHead>{/* Removed (Month) */}{/*
           */}<TableHead className="p-2 w-24">CPU</TableHead>{/*
           */}<TableHead className="p-2 w-24">RAM</TableHead>{/*
           */}<TableHead className="p-2 w-24">Disk</TableHead>
@@ -39,7 +40,7 @@ export function VpsTable({ vpsList, isLoading }: VpsTableProps) {
           ))}
           {!isLoading && (!vpsList || vpsList.length === 0) && (
             <TableRow>
-              <TableCell colSpan={13} className="h-32 text-center text-muted-foreground"> {/* Adjusted colSpan */}
+              <TableCell colSpan={13} className="h-32 text-center text-muted-foreground">
                 <div className="flex flex-col items-center justify-center gap-2">
                   <ServerOffIcon className="w-12 h-12 text-muted-foreground/50" />
                   No VPS instances found.

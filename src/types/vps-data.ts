@@ -3,18 +3,18 @@ export interface VpsData {
   id: string;
   name: string;
   status: 'online' | 'offline' | 'error';
-  system: string;
-  countryRegion: string;
+  system: string; // Original OS string from admin (e.g., "Debian 11")
+  location: string; // Was countryRegion
+  ip_address: string | null; // For detailed view
   price: string;
   uptime: string;
   load: number;
   nicDown: string;
   nicUp: string;
-  // usageDown and usageUp are replaced by network.currentMonthIn/Out for the "Usage" column
   cpu: {
     model: string;
     cores: number;
-    usage: number;
+    usage: number; // Percentage
   };
   disk: {
     used: string;
@@ -27,7 +27,7 @@ export interface VpsData {
     percentage: number;
   };
   swap: {
-    status: string;
+    status: string; // e.g., "OFF", "ON"
     used?: string;
     total?: string;
     percentage?: number;
@@ -35,8 +35,8 @@ export interface VpsData {
   network: {
     totalIn: string;
     totalOut: string;
-    currentMonthIn: string;
-    currentMonthOut: string;
+    currentMonthIn: string; // Usage for current billing cycle
+    currentMonthOut: string; // Usage for current billing cycle
   };
   loadAverage: [number, number, number];
   processCount: number;
@@ -44,8 +44,13 @@ export interface VpsData {
     tcp: number;
     udp: number;
   };
-  bootTime: string;
-  lastActive: string;
-  daysToExpiry: number | string; // New field
+  bootTime: string; // ISO string
+  lastActive: string; // ISO string
+  daysToExpiry: number | string; // Renamed from expires_in, calculation done in API
+  
+  // Fields for expanded detail view, populated from admin notes
+  billingCycle?: string | null;
+  planBandwidth?: string | null;
+  planTrafficType?: string | null; // Mapped to "Both", "Outbound only", "Inbound only"
+  agentVersion?: string | null;
 }
-
