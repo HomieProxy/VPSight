@@ -23,11 +23,31 @@ function initializeDatabase() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS vps_instances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT,
+      group_name TEXT,
+      ip_address TEXT,
+      country_region TEXT,
+      agent_version TEXT,
+      secret TEXT UNIQUE NOT NULL,
+      install_command TEXT,
+      note_billing_start_date TEXT,
+      note_billing_end_date TEXT,
+      note_billing_cycle TEXT,
+      note_billing_amount TEXT,
+      note_plan_bandwidth TEXT,
+      note_plan_traffic_type INTEGER, -- 0: Both, 1: Outbound only, 2: Inbound only
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   const adminExists = db.prepare('SELECT id FROM admins LIMIT 1').get();
 
   if (!adminExists) {
     const defaultUsername = process.env.INITIAL_ADMIN_USERNAME || 'admin';
-    // It's highly recommended to set INITIAL_ADMIN_PASSWORD in your .env.local
     const defaultPassword = process.env.INITIAL_ADMIN_PASSWORD || 'changeme'; 
     
     if (defaultPassword === 'changeme' && process.env.NODE_ENV === 'production') {
@@ -36,7 +56,6 @@ function initializeDatabase() {
         console.log("INFO: Default admin account 'admin' created with password 'changeme'. Please change this password in a production environment or by setting INITIAL_ADMIN_PASSWORD.");
     }
 
-
     const hashedPassword = bcrypt.hashSync(defaultPassword, 10);
     
     try {
@@ -44,12 +63,11 @@ function initializeDatabase() {
         .run(defaultUsername, hashedPassword);
       console.log(`Initial admin user '${defaultUsername}' created.`);
     } catch (error: any) {
-      // Catch unique constraint violation if somehow another process created it
       if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
         console.log(`Admin user '${defaultUsername}' already exists or was concurrently created.`);
       } else {
         console.error('Failed to create initial admin user:', error);
-        throw error; // Re-throw if it's not a unique constraint error
+        throw error; 
       }
     }
   }

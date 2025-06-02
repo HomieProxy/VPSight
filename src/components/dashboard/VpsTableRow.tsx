@@ -3,7 +3,7 @@ import type { VpsData } from '@/types/vps-data';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { StatusIndicator } from './StatusIndicator';
 import { UsageBar } from './UsageBar';
-import { ComputerIcon, MapPinIcon, ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
+import { ComputerIcon, GlobeIcon, ArrowDownIcon, ArrowUpIcon } from 'lucide-react'; // Changed MapPinIcon to GlobeIcon
 
 interface VpsTableRowProps {
   vps: VpsData;
@@ -24,8 +24,8 @@ export function VpsTableRow({ vps }: VpsTableRowProps) {
       </TableCell>
       <TableCell className="p-2 text-sm whitespace-nowrap">
         <div className="flex items-center gap-1">
-          <MapPinIcon className="h-4 w-4 text-muted-foreground" />
-          {vps.location}
+          <GlobeIcon className="h-4 w-4 text-muted-foreground" /> {/* Changed from MapPinIcon */}
+          {vps.countryRegion} {/* Changed from vps.location */}
         </div>
       </TableCell>
       <TableCell className="p-2 text-sm whitespace-nowrap">{vps.price}</TableCell>

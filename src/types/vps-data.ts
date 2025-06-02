@@ -2,30 +2,30 @@
 export interface VpsData {
   id: string;
   name: string;
-  status: 'online' | 'offline' | 'error'; // New: For status indicator
-  system: string; // Existing: e.g. "Debian 11"
-  location: string; // New: e.g. "HK"
-  price: string; // New: e.g. "$4.20/月"
-  uptime: string; // New: e.g. "138 Days"
-  load: number; // New for single load value display, e.g., from loadAverage[0]
-  nicDown: string; // New: e.g. "166.17K"
-  nicUp: string; // New: e.g. "159.82K"
-  usageDown: string; // New: e.g. "4.17T" (can be derived from network.totalIn)
-  usageUp: string; // New: e.g. "4.17T" (can be derived from network.totalOut)
+  status: 'online' | 'offline' | 'error';
+  system: string;
+  countryRegion: string; // Replaces 'location', maps to country_region from admin form/DB
+  price: string; 
+  uptime: string; 
+  load: number; 
+  nicDown: string;
+  nicUp: string; 
+  usageDown: string; 
+  usageUp: string; 
   cpu: {
     model: string;
     cores: number;
-    usage: number; // percentage for usage bar
+    usage: number; 
   };
   disk: {
     used: string;
     total: string;
-    percentage: number; // for usage bar
+    percentage: number; 
   };
   ram: {
     used: string;
     total: string;
-    percentage: number; // for usage bar
+    percentage: number;
   };
   swap: {
     status: string;
@@ -33,13 +33,13 @@ export interface VpsData {
     total?: string;
     percentage?: number;
   };
-  network: { // Keep original network fields for source data
+  network: { 
     totalIn: string;
     totalOut: string;
     currentMonthIn: string;
     currentMonthOut: string;
   };
-  loadAverage: [number, number, number]; // Source for 'load'
+  loadAverage: [number, number, number];
   processCount: number;
   connections: {
     tcp: number;

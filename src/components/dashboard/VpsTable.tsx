@@ -20,7 +20,7 @@ export function VpsTable({ vpsList, isLoading }: VpsTableProps) {
             <TableHead className="p-2 text-center w-16">Status</TableHead>
             <TableHead className="p-2">Name</TableHead>
             <TableHead className="p-2">System</TableHead>
-            <TableHead className="p-2">Location</TableHead>
+            <TableHead className="p-2">Country/Region</TableHead> {/* Updated from Location */}
             <TableHead className="p-2">Price</TableHead>
             <TableHead className="p-2">Uptime</TableHead>
             <TableHead className="p-2 text-center">Load</TableHead>
