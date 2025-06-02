@@ -6,11 +6,8 @@ export const AddVpsInstanceSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   type: z.string().optional(),
   group_name: z.string().optional(),
-  ip_address: z.string().ip({ version: 'ipv4', message: 'Invalid IP address' }).optional().or(z.literal('')),
+  // ip_address is no longer a form input, will be reported by agent
   country_region: z.string().optional(),
-  // agent_version is not part of the form, set by agent
-  // secret is generated
-  // install_command is generated
   note_billing_start_date: z.string().optional(),
   note_billing_end_date: z.string().optional(),
   note_billing_cycle: z.string().optional(),
@@ -25,4 +22,31 @@ export interface ActionResult {
   success: boolean;
   error?: string;
   data?: any;
+}
+
+// Zod schema for EditVpsInstance form validation (can be expanded later)
+export const EditVpsInstanceSchema = AddVpsInstanceSchema.extend({
+  id: z.number(),
+  // agent_version, secret, install_command are typically not directly edited
+});
+
+export type EditVpsInstanceInput = z.infer<typeof EditVpsInstanceSchema>;
+
+export interface VpsAdminEntry {
+  id: number;
+  name: string;
+  type: string | null;
+  group_name: string | null;
+  ip_address: string | null;
+  country_region: string | null;
+  agent_version: string | null;
+  secret: string;
+  install_command: string;
+  note_billing_start_date: string | null;
+  note_billing_end_date: string | null;
+  note_billing_cycle: string | null;
+  note_billing_amount: string | null;
+  note_plan_bandwidth: string | null;
+  note_plan_traffic_type: number | null;
+  created_at: string;
 }

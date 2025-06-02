@@ -22,50 +22,75 @@ import {
 } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { addVpsInstance } from "@/app/admin/actions";
-import { AddVpsInstanceSchema, type AddVpsInstanceInput } from "@/app/admin/definitions";
+import { updateVpsInstance, getVpsInstanceById } from "@/app/admin/actions"; // Assuming updateVpsInstance exists
+import { EditVpsInstanceSchema, type EditVpsInstanceInput, type VpsAdminEntry } from "@/app/admin/definitions";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
-import { PlusCircleIcon } from "lucide-react";
+import { useState, useEffect } from "react";
+import { FilePenLineIcon, Loader2Icon } from "lucide-react";
 
-interface AddServerDialogProps {
+interface EditServerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  vps: VpsAdminEntry | null;
   onSuccess?: () => void;
 }
 
-export function AddServerDialog({ open, onOpenChange, onSuccess }: AddServerDialogProps) {
+export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSuccess }: EditServerDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingVps, setIsLoadingVps] = useState(false);
 
-  const form = useForm<AddVpsInstanceInput>({
-    resolver: zodResolver(AddVpsInstanceSchema),
-    defaultValues: {
+  const form = useForm<EditVpsInstanceInput>({
+    resolver: zodResolver(EditVpsInstanceSchema),
+    defaultValues: { // Default values will be overridden by fetched VPS data
+      id: 0, // Will be set from vps prop
       name: "",
       type: "",
       group_name: "",
-      // ip_address: "", // Removed, will be reported by agent
       country_region: "",
       note_billing_start_date: "",
       note_billing_end_date: "",
       note_billing_cycle: "",
       note_billing_amount: "",
       note_plan_bandwidth: "",
-      note_plan_traffic_type: 0, 
+      note_plan_traffic_type: 0,
     },
   });
 
-  const onSubmit = async (data: AddVpsInstanceInput) => {
+  useEffect(() => {
+    if (open && initialVps) {
+        // Pre-fill form with existing VPS data when dialog opens and VPS data is available
+        form.reset({
+            id: initialVps.id,
+            name: initialVps.name || "",
+            type: initialVps.type || "",
+            group_name: initialVps.group_name || "",
+            country_region: initialVps.country_region || "",
+            note_billing_start_date: initialVps.note_billing_start_date || "",
+            note_billing_end_date: initialVps.note_billing_end_date || "",
+            note_billing_cycle: initialVps.note_billing_cycle || "",
+            note_billing_amount: initialVps.note_billing_amount || "",
+            note_plan_bandwidth: initialVps.note_plan_bandwidth || "",
+            note_plan_traffic_type: initialVps.note_plan_traffic_type === null ? undefined : initialVps.note_plan_traffic_type,
+        });
+    } else if (!open) {
+        form.reset(); // Reset form when dialog closes
+    }
+  }, [open, initialVps, form]);
+
+
+  const onSubmit = async (data: EditVpsInstanceInput) => {
+    if (!initialVps) return;
     setIsSubmitting(true);
     try {
-      const result = await addVpsInstance(data);
+      // Ensure ID is part of the data sent to the server action
+      const result = await updateVpsInstance({ ...data, id: initialVps.id }); 
       if (result.success) {
-        toast({ title: "Success", description: "VPS instance added successfully. IP address will be updated by the agent." });
-        form.reset();
+        toast({ title: "Success", description: "VPS instance updated successfully." });
         onOpenChange(false);
         if (onSuccess) onSuccess();
       } else {
-        toast({ title: "Error", description: result.error || "Failed to add VPS instance.", variant: "destructive" });
+        toast({ title: "Error", description: result.error || "Failed to update VPS instance.", variant: "destructive" });
       }
     } catch (error) {
       toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
@@ -74,36 +99,56 @@ export function AddServerDialog({ open, onOpenChange, onSuccess }: AddServerDial
     }
   };
 
+  if (!initialVps && open) { // Show loading or error if VPS data isn't available when dialog is open
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Loading VPS Data...</DialogTitle>
+                </DialogHeader>
+                <div className="flex justify-center items-center py-10">
+                    <Loader2Icon className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+  }
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center">
-            <PlusCircleIcon className="mr-2 h-6 w-6" /> Add New Server
+            <FilePenLineIcon className="mr-2 h-6 w-6" /> Edit Server (ID: {initialVps?.id})
           </DialogTitle>
           <DialogDescription>
-            Fill in the details for the new VPS instance. Secret, install command, and IP address will be handled automatically.
+            Modify the details for this VPS instance. IP address is reported by the agent and not directly editable here.
           </DialogDescription>
         </DialogHeader>
+        {isLoadingVps ? (
+            <div className="flex justify-center items-center py-10">
+                <Loader2Icon className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        ) : (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* VPS Details */}
             <div className="space-y-2">
               <Label htmlFor="name">Name <span className="text-destructive">*</span></Label>
-              <Input id="name" {...form.register("name")} placeholder="e.g., Production Server 1" />
+              <Input id="name" {...form.register("name")} />
               {form.formState.errors.name && <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">Type</Label>
-              <Input id="type" {...form.register("type")} placeholder="e.g., Premium KVM" />
+              <Input id="type" {...form.register("type")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="group_name">Group</Label>
-              <Input id="group_name" {...form.register("group_name")} placeholder="e.g., Web Servers" />
+              <Input id="group_name" {...form.register("group_name")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="country_region">Country/Region</Label>
-              <Input id="country_region" {...form.register("country_region")} placeholder="e.g., USA / New York" />
+              <Input id="country_region" {...form.register("country_region")} />
             </div>
           </div>
 
@@ -117,13 +162,13 @@ export function AddServerDialog({ open, onOpenChange, onSuccess }: AddServerDial
               <Label htmlFor="note_billing_end_date">End Date</Label>
               <Input id="note_billing_end_date" type="date" {...form.register("note_billing_end_date")} />
             </div>
-            <div className="space-y-2">
+             <div className="space-y-2">
               <Label htmlFor="note_billing_cycle">Cycle</Label>
-              <Input id="note_billing_cycle" {...form.register("note_billing_cycle")} placeholder="e.g., Monthly, Annually" />
+              <Input id="note_billing_cycle" {...form.register("note_billing_cycle")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="note_billing_amount">Amount</Label>
-              <Input id="note_billing_amount" {...form.register("note_billing_amount")} placeholder="e.g., $10.00 USD" />
+              <Input id="note_billing_amount" {...form.register("note_billing_amount")} />
             </div>
           </div>
 
@@ -131,13 +176,14 @@ export function AddServerDialog({ open, onOpenChange, onSuccess }: AddServerDial
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="note_plan_bandwidth">Bandwidth</Label>
-              <Input id="note_plan_bandwidth" {...form.register("note_plan_bandwidth")} placeholder="e.g., 1TB, 500GB" />
+              <Input id="note_plan_bandwidth" {...form.register("note_plan_bandwidth")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="note_plan_traffic_type">Traffic Type</Label>
               <Select
                 onValueChange={(value) => form.setValue("note_plan_traffic_type", parseInt(value))}
-                defaultValue={form.getValues("note_plan_traffic_type")?.toString() || "0"}
+                value={form.watch("note_plan_traffic_type")?.toString()} // Ensure value is watched for dynamic updates
+                defaultValue={initialVps?.note_plan_traffic_type?.toString() || "0"}
               >
                 <SelectTrigger id="note_plan_traffic_type">
                   <SelectValue placeholder="Select traffic type" />
@@ -154,12 +200,15 @@ export function AddServerDialog({ open, onOpenChange, onSuccess }: AddServerDial
             <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={() => { form.reset(); onOpenChange(false); }}>Cancel</Button>
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Adding..." : "Add Server"}
+            <Button type="submit" disabled={isSubmitting || isLoadingVps}>
+              {isSubmitting ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
+

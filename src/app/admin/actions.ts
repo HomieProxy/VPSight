@@ -9,8 +9,8 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
-import type { AddVpsInstanceInput, ActionResult } from './definitions';
-import { AddVpsInstanceSchema } from './definitions';
+import type { AddVpsInstanceInput, ActionResult, VpsAdminEntry, EditVpsInstanceInput } from './definitions';
+import { AddVpsInstanceSchema, EditVpsInstanceSchema } from './definitions';
 
 export async function login(formData: FormData): Promise<ActionResult> {
   const username = formData.get('username') as string;
@@ -71,8 +71,7 @@ export async function addVpsInstance(input: AddVpsInstanceInput): Promise<Action
       name,
       type,
       group_name,
-      ip_address,
-      country_region,
+      country_region, // ip_address removed from form
       note_billing_start_date,
       note_billing_end_date,
       note_billing_cycle,
@@ -84,18 +83,18 @@ export async function addVpsInstance(input: AddVpsInstanceInput): Promise<Action
     // Generate secret (16 hex characters)
     const secret = crypto.randomBytes(8).toString('hex').toUpperCase();
     
-    // Construct install command (replace YOUR_APP_URL with actual URL or make it configurable)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002'; // Example, ensure this is set
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
     const install_command = `curl -sSL ${appUrl}/install_agent.sh | sudo bash -s ${secret}`;
 
+    // IP address will be NULL initially, to be reported by agent
     const result = db.prepare(
       `INSERT INTO vps_instances (
-        name, type, group_name, ip_address, country_region, secret, install_command,
+        name, type, group_name, country_region, secret, install_command, ip_address,
         note_billing_start_date, note_billing_end_date, note_billing_cycle, note_billing_amount,
         note_plan_bandwidth, note_plan_traffic_type
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`
     ).run(
-      name, type || null, group_name || null, ip_address || null, country_region || null, secret, install_command,
+      name, type || null, group_name || null, country_region || null, secret, install_command,
       note_billing_start_date || null, note_billing_end_date || null, note_billing_cycle || null, note_billing_amount || null,
       note_plan_bandwidth || null, note_plan_traffic_type !== undefined ? note_plan_traffic_type : null
     );
@@ -112,9 +111,18 @@ export async function addVpsInstance(input: AddVpsInstanceInput): Promise<Action
   }
 }
 
-export async function getVpsInstances(): Promise<any[]> {
+export async function getVpsInstances(): Promise<VpsAdminEntry[]> {
   try {
-    const vpsList = db.prepare('SELECT * FROM vps_instances ORDER BY created_at DESC').all();
+    // Ensure all fields from VpsAdminEntry are selected
+    const vpsList: VpsAdminEntry[] = db.prepare(`
+      SELECT 
+        id, name, type, group_name, ip_address, country_region, agent_version, 
+        secret, install_command, created_at,
+        note_billing_start_date, note_billing_end_date, note_billing_cycle, note_billing_amount,
+        note_plan_bandwidth, note_plan_traffic_type
+      FROM vps_instances 
+      ORDER BY created_at DESC
+    `).all() as VpsAdminEntry[];
     return vpsList;
   } catch (error) {
     console.error('Error fetching VPS instances:', error);
@@ -134,4 +142,37 @@ export async function deleteVpsInstance(id: number): Promise<ActionResult> {
     console.error('Error deleting VPS instance:', error);
     return { success: false, error: 'Failed to delete VPS instance.' };
   }
+}
+
+export async function getVpsInstanceById(id: number): Promise<VpsAdminEntry | null> {
+  try {
+    const vps: VpsAdminEntry | undefined = db.prepare(
+      `SELECT 
+        id, name, type, group_name, ip_address, country_region, agent_version, 
+        secret, install_command, created_at,
+        note_billing_start_date, note_billing_end_date, note_billing_cycle, note_billing_amount,
+        note_plan_bandwidth, note_plan_traffic_type
+       FROM vps_instances WHERE id = ?`
+    ).get(id) as VpsAdminEntry | undefined;
+    return vps || null;
+  } catch (error) {
+    console.error(`Error fetching VPS instance with id ${id}:`, error);
+    return null;
+  }
+}
+
+export async function updateVpsInstance(input: EditVpsInstanceInput): Promise<ActionResult> {
+  // Placeholder for actual update logic
+  // This would involve validating input with EditVpsInstanceSchema and updating the DB
+  console.log("Update VPS Instance (not implemented yet):", input);
+  await new Promise(resolve => setTimeout(resolve, 500)); // Simulate async operation
+
+  // Example:
+  // const validation = EditVpsInstanceSchema.safeParse(input);
+  // if (!validation.success) { /* ... handle error ... */ }
+  // const { id, ...dataToUpdate } = validation.data;
+  // db.prepare(...).run(..., id);
+  
+  revalidatePath('/admin/dashboard');
+  return { success: true, error: "Edit functionality is not fully implemented yet." };
 }
