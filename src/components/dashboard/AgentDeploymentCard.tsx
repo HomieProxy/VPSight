@@ -6,22 +6,31 @@ import { useToast } from '@/hooks/use-toast';
 
 export function AgentDeploymentCard() {
   const { toast } = useToast();
-  const command = 'curl -sSL https://your-vpsight-url.com/install_agent.sh | sudo bash -s YOUR_SECRET_CODE';
+  // Updated command to use the local script from the public folder
+  const command = 'curl -sSL /install_agent.sh | sudo bash -s YOUR_SECRET_CODE';
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(command).then(() => {
-      toast({
-        title: "Copied to clipboard!",
-        description: "Agent deployment command copied.",
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(command).then(() => {
+        toast({
+          title: "Copied to clipboard!",
+          description: "Agent deployment command copied.",
+        });
+      }).catch(err => {
+        toast({
+          title: "Failed to copy",
+          description: "Could not copy command to clipboard.",
+          variant: "destructive",
+        });
+        console.error('Failed to copy: ', err);
       });
-    }).catch(err => {
+    } else {
       toast({
-        title: "Failed to copy",
-        description: "Could not copy command to clipboard.",
+        title: "Clipboard not available",
+        description: "Cannot copy to clipboard in this environment.",
         variant: "destructive",
       });
-      console.error('Failed to copy: ', err);
-    });
+    }
   };
 
   return (
