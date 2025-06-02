@@ -17,18 +17,18 @@ export function VpsTable({ vpsList, isLoading }: VpsTableProps) {
       <Table className="min-w-full">
         <TableHeader className="bg-muted/30">
           <TableRow>
-            <TableHead className="p-2 text-center w-16">Status</TableHead>
-            <TableHead className="p-2">Name</TableHead>
-            <TableHead className="p-2">System</TableHead>
-            <TableHead className="p-2">Country/Region</TableHead> {/* Updated from Location */}
-            <TableHead className="p-2">Price</TableHead>
-            <TableHead className="p-2">Uptime</TableHead>
-            <TableHead className="p-2 text-center">Load</TableHead>
-            <TableHead className="p-2 whitespace-nowrap">NIC ↓ | ↑</TableHead>
-            <TableHead className="p-2 whitespace-nowrap">Usage ↓ | ↑</TableHead>
-            <TableHead className="p-2 w-24">CPU</TableHead>
-            <TableHead className="p-2 w-24">RAM</TableHead>
-            <TableHead className="p-2 w-24">Disk</TableHead>
+            <TableHead className="p-2 text-center w-16">Status</TableHead>{/*
+            */}<TableHead className="p-2">Name</TableHead>{/*
+            */}<TableHead className="p-2">System</TableHead>{/*
+            */}<TableHead className="p-2">Country/Region</TableHead>{/* Updated from Location */}{/*
+            */}<TableHead className="p-2">Price</TableHead>{/*
+            */}<TableHead className="p-2">Uptime</TableHead>{/*
+            */}<TableHead className="p-2 text-center">Load</TableHead>{/*
+            */}<TableHead className="p-2 whitespace-nowrap">NIC ↓ | ↑</TableHead>{/*
+            */}<TableHead className="p-2 whitespace-nowrap">Usage ↓ | ↑</TableHead>{/*
+            */}<TableHead className="p-2 w-24">CPU</TableHead>{/*
+            */}<TableHead className="p-2 w-24">RAM</TableHead>{/*
+            */}<TableHead className="p-2 w-24">Disk</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -52,3 +52,4 @@ export function VpsTable({ vpsList, isLoading }: VpsTableProps) {
     </div>
   );
 }
+
