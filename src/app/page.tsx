@@ -5,13 +5,19 @@ import React, { useState, useEffect } from 'react';
 import { DashboardHeader } from '@/components/dashboard/Header';
 import { VpsTable } from '@/components/dashboard/VpsTable';
 import type { VpsData } from '@/types/vps-data';
-// AgentDeploymentCard is removed from this page, but you can add it elsewhere if needed.
-// import { AgentDeploymentCard } from '@/components/dashboard/AgentDeploymentCard'; 
 
-export default function VpsDashboardPage() {
+// Explicitly define props that Next.js pages can receive, even if not used directly.
+// For the root page, params is typically empty.
+interface VpsDashboardPageProps {
+  params?: Record<string, string | string[] | undefined>;
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
+export default function VpsDashboardPage({ params, searchParams }: VpsDashboardPageProps) {
   const [vpsList, setVpsList] = useState<VpsData[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,7 +33,7 @@ export default function VpsDashboardPage() {
       } catch (err: any) {
         console.error("Error fetching VPS data:", err);
         setError(err.message || 'An unknown error occurred while fetching data.');
-        setVpsList([]); // Set to empty array on error to show "No VPS" message or error specific message
+        setVpsList([]); 
       } finally {
         setIsLoading(false);
       }
@@ -36,13 +42,16 @@ export default function VpsDashboardPage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    // Ensure current year is determined on the client side after hydration
+    setCurrentYear(new Date().getFullYear());
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <DashboardHeader />
       <main className="flex-grow container mx-auto p-4 md:p-6 lg:p-8">
         <div className="space-y-6">
-          {/* The AgentDeploymentCard could be placed here or in a dedicated section */}
-          {/* <AgentDeploymentCard /> */}
           {error && (
             <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
               <span className="font-medium">Error!</span> {error}
@@ -52,7 +61,7 @@ export default function VpsDashboardPage() {
         </div>
       </main>
       <footer className="text-center p-4 text-sm text-muted-foreground mt-8">
-        VPSight &copy; {new Date().getFullYear()}
+        VPSight &copy; {currentYear !== null ? currentYear : ''}
       </footer>
     </div>
   );

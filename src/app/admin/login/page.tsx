@@ -12,7 +12,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { KeyRoundIcon, LogInIcon } from 'lucide-react';
 
-const AdminLoginPage: NextPage = () => {
+// Explicitly define props that Next.js pages can receive
+interface AdminLoginPageProps {
+  params?: Record<string, string | string[] | undefined>;
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
+const AdminLoginPage: NextPage<AdminLoginPageProps> = ({ params, searchParams }) => {
   const router = useRouter();
   const { toast } = useToast();
   const [username, setUsername] = useState('');
