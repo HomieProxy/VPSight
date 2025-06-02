@@ -42,7 +42,8 @@ import {
   ReplaceIcon,
   FileClockIcon,
   CheckCircle2Icon,
-  CalendarDaysIcon
+  CalendarDaysIcon,
+  BellRingIcon
 } from 'lucide-react';
 import { format, parseISO, isValid, differenceInDays, isFuture, addMonths, addYears, formatISO, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -123,34 +124,47 @@ const getCycleDetails = (
 
 export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isRenewDialogOpen, setIsRenewDialogOpen] = useState(false);
-  const [isRenewing, setIsRenewing] = useState(false);
   const { toast } = useToast();
 
-  const [initialDisplayState, setInitialDisplayState] = useState({
-    daysToExpiry: vps.daysToExpiry,
-    endDateString: vps.note_billing_end_date,
-    billingCycle: vps.billingCycle,
-  });
-  const [isRenewActionedThisSession, setIsRenewActionedThisSession] = useState(false);
-
-  // This effect is crucial. It should only run when the vps.id changes,
-  // effectively resetting the "initial" state for a new VPS item.
-  // It should NOT run if only other props of the *same* vps item change.
+  const [isRenewalAcknowledged, setIsRenewalAcknowledged] = useState(false);
+  const [isAutoRenewing, setIsAutoRenewing] = useState(false);
+  
+  // Reset acknowledgment state if the VPS ID changes
   useEffect(() => {
-    setInitialDisplayState({
-        daysToExpiry: vps.daysToExpiry,
-        endDateString: vps.note_billing_end_date,
-        billingCycle: vps.billingCycle,
-    });
-    setIsRenewActionedThisSession(false); 
-  }, [vps.id]); // CRITICAL: Only depends on vps.id
+    setIsRenewalAcknowledged(false);
+    setIsAutoRenewing(false);
+  }, [vps.id]);
+
+  // Effect for client-side "auto-renewal"
+  useEffect(() => {
+    const performAutoRenewal = async () => {
+      if (isRenewalAcknowledged && typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 0 && !isAutoRenewing) {
+        setIsAutoRenewing(true);
+        toast({ title: "Auto-Renewal Triggered", description: `Attempting to auto-renew VPS: ${vps.name}.` });
+        try {
+          const result = await renewVpsInstance(parseInt(vps.id, 10));
+          if (result.success) {
+            toast({ title: "Auto-Renewal Successful", description: `VPS ${vps.name} has been auto-renewed.` });
+            onActionSuccess(); // Re-fetch data to update the row
+            setIsRenewalAcknowledged(false); // Reset for next cycle
+          } else {
+            toast({ title: "Auto-Renewal Failed", description: result.error || "Failed to auto-renew VPS.", variant: "destructive" });
+          }
+        } catch (error) {
+          toast({ title: "Auto-Renewal Error", description: "An unexpected error occurred during auto-renewal.", variant: "destructive" });
+        } finally {
+          setIsAutoRenewing(false);
+        }
+      }
+    };
+    performAutoRenewal();
+  }, [vps.daysToExpiry, isRenewalAcknowledged, vps.id, vps.name, onActionSuccess, toast, isAutoRenewing]);
 
 
   const formatDaysToExpiryText = (days: number | string): string => {
     if (typeof days === 'string') return days; 
     if (days < 0) return 'Expired';
-    if (days === 0) return 'Today';
+    if (days === 0) return 'Expires Today';
     return `${days}d`;
   };
   
@@ -162,73 +176,43 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     </div>
   );
   
-  // Use the live vps prop for determining if the *actual* VPS (after potential re-fetches) can be renewed.
-  // This ensures that if a renewal happened, and the new date is still <15 days, it can be renewed again.
-  const canActuallyRenew = typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0;
+  const canAcknowledgeRenewal = typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0;
 
-  const handleRenew = async () => {
-    if (!vps || !vps.id) return;
-    setIsRenewing(true);
-    try {
-      const result = await renewVpsInstance(parseInt(vps.id, 10));
-      if (result.success) {
-        toast({ title: "Success", description: `VPS ${vps.name} renewal processed. Database updated.` });
-        
-        // If this is the first renewal action for this row in this session,
-        // the initialDisplayState (already set by useEffect or previous prop state)
-        // will be used for the "frozen" display.
-        // We just need to mark that a renewal has happened.
-        setIsRenewActionedThisSession(true); // Mark that renewal happened for this row in this session
-        onActionSuccess(); // Parent will re-fetch, new props will come, but display should be frozen for this row
-      } else {
-        toast({ title: "Error", description: result.error || "Failed to renew VPS.", variant: "destructive" });
-      }
-    } catch (error) {
-      toast({ title: "Error", description: "An unexpected error occurred during renewal.", variant: "destructive" });
-    } finally {
-      setIsRenewing(false);
-      setIsRenewDialogOpen(false);
-    }
+  const handleAcknowledgeRenewal = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent row expansion
+    setIsRenewalAcknowledged(true);
+    toast({ 
+      title: "Renewal Acknowledged", 
+      description: `VPS ${vps.name} will be auto-renewed upon expiry.` 
+    });
   };
 
-  // Determine which values to use for display based on whether a renewal has been actioned in this session
-  const endDateForDisplay = isRenewActionedThisSession 
-    ? initialDisplayState.endDateString 
-    : vps.note_billing_end_date;
-  
-  const daysToExpiryForDisplay = isRenewActionedThisSession
-    ? initialDisplayState.daysToExpiry
-    : vps.daysToExpiry;
-  
-  const cycleForDisplay = isRenewActionedThisSession
-    ? initialDisplayState.billingCycle
-    : vps.billingCycle;
 
-  const { totalDaysInCycle } = getCycleDetails(endDateForDisplay, cycleForDisplay);
-  const daysRemainingForTextDisplay = daysToExpiryForDisplay;
+  const { totalDaysInCycle } = getCycleDetails(vps.note_billing_end_date, vps.billingCycle);
+  const daysRemainingForTextDisplay = vps.daysToExpiry;
 
   let progressBarPercentage = 0;
   let progressIndicatorColor = "bg-primary"; 
 
-  if (endDateForDisplay && totalDaysInCycle > 0 && typeof daysToExpiryForDisplay === 'number') {
-    const actualDaysLeftForBar = Math.max(0, daysToExpiryForDisplay);
+  if (vps.note_billing_end_date && totalDaysInCycle > 0 && typeof vps.daysToExpiry === 'number') {
+    const actualDaysLeftForBar = Math.max(0, vps.daysToExpiry); // Ensure bar doesn't go negative
     progressBarPercentage = Math.min(100, Math.max(0, (actualDaysLeftForBar / totalDaysInCycle) * 100));
 
-    if (daysToExpiryForDisplay < 0) { // Expired
+    if (vps.daysToExpiry < 0) { // Expired
       progressIndicatorColor = "bg-muted"; 
-    } else if (daysToExpiryForDisplay <= 7) { // 0-7 days
+    } else if (vps.daysToExpiry <= 7) { // 0-7 days
       progressIndicatorColor = "bg-red-500";
-    } else if (daysToExpiryForDisplay <= 15) { // 8-15 days
+    } else if (vps.daysToExpiry <= 15) { // 8-15 days
       progressIndicatorColor = "bg-orange-500";
     } else { // > 15 days
       progressIndicatorColor = "bg-green-500";
     }
-  } else if (typeof daysToExpiryForDisplay === 'string' && daysToExpiryForDisplay.toLowerCase() === 'expired') {
+  } else if (typeof vps.daysToExpiry === 'string' && vps.daysToExpiry.toLowerCase() === 'expired') {
       progressBarPercentage = 0;
-      progressIndicatorColor = "bg-muted"; // Muted for expired string
-  } else { // N/A or other non-numeric states
+      progressIndicatorColor = "bg-muted"; 
+  } else { 
       progressBarPercentage = 0; 
-      progressIndicatorColor = "bg-muted"; // Muted for N/A
+      progressIndicatorColor = "bg-muted"; 
   }
 
 
@@ -265,7 +249,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
         <TableCell className="p-2 text-sm whitespace-nowrap">{vps.uptime}</TableCell>
         <TableCell className="p-2 text-sm whitespace-nowrap">
           <div className="flex items-center gap-1.5 min-w-[150px] sm:min-w-[180px] justify-start">
-            {(endDateForDisplay && totalDaysInCycle > 0) || (typeof daysToExpiryForDisplay === 'string' && daysToExpiryForDisplay.toLowerCase() === 'expired') ? (
+            {(vps.note_billing_end_date && totalDaysInCycle > 0) || (typeof daysRemainingForTextDisplay === 'string' && daysRemainingForTextDisplay.toLowerCase() === 'expired') ? (
               <>
                 <UsageBar 
                   percentage={progressBarPercentage} 
@@ -273,7 +257,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
                   barClassName={progressIndicatorColor}
                   showText={false} 
                 />
-                <span className="text-xs w-10 text-right">{formatDaysToExpiryText(daysRemainingForTextDisplay)}</span>
+                <span className="text-xs w-auto min-w-[30px] text-right">{formatDaysToExpiryText(daysRemainingForTextDisplay)}</span>
               </>
             ) : (
               <span className="text-xs w-[100px] sm:w-[120px] flex items-center">
@@ -282,18 +266,18 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
               </span>
             )}
             
-            {isRenewActionedThisSession ? (
-                <CheckCircle2Icon className="h-5 w-5 text-green-500 shrink-0" title={`Renewal actioned. Database updated.`} />
-            ) : canActuallyRenew ? ( 
+            {isRenewalAcknowledged ? (
+                <CheckCircle2Icon className="h-5 w-5 text-green-500 shrink-0" title={`Renewal acknowledged. Auto-renewal upon expiry.`} />
+            ) : canAcknowledgeRenewal ? ( 
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="h-6 px-1.5 py-0 text-xs shrink-0"
-                onClick={(e) => { e.stopPropagation(); setIsRenewDialogOpen(true); }}
-                disabled={isRenewing}
-                title="Renew Subscription"
+                onClick={handleAcknowledgeRenewal}
+                disabled={isAutoRenewing}
+                title="Acknowledge upcoming renewal"
               >
-                {isRenewing ? <Loader2Icon className="h-3 w-3 animate-spin" /> : <RefreshCcwIcon className="h-3 w-3"/>}
+                {isAutoRenewing ? <Loader2Icon className="h-3 w-3 animate-spin" /> : <BellRingIcon className="h-3 w-3"/>}
               </Button>
             ) : null}
           </div>
@@ -371,25 +355,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
           </TableCell>
         </TableRow>
       )}
-      <AlertDialog open={isRenewDialogOpen} onOpenChange={setIsRenewDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Renewal</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to renew the subscription for VPS: <strong>{vps?.name}</strong>?
-              This will extend the billing end date based on its current cycle: <strong>{initialDisplayState.billingCycle || vps?.billingCycle || 'N/A'}</strong>.
-              Current expiry (display): {formatBillingDateShort(endDateForDisplay) || formatDaysToExpiryText(daysToExpiryForDisplay)}.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsRenewing(false)} disabled={isRenewing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRenew} disabled={isRenewing} className="bg-primary hover:bg-primary/90">
-              {isRenewing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {isRenewing ? 'Renewing...' : 'Confirm Renew'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* AlertDialog for renewal confirmation is removed as renewal is now automatic upon expiry after acknowledgment */}
     </>
   );
 }
@@ -403,7 +369,8 @@ export function VpsTableSkeletonRow() {
             {i === 6 ? ( 
               <div className="flex items-center gap-1.5">
                 <div className="h-3 bg-muted rounded animate-pulse w-16 sm:w-20" /> 
-                <div className="h-4 bg-muted rounded animate-pulse w-8" />
+                <div className="h-4 bg-muted rounded animate-pulse w-auto min-w-[30px]" /> {/* Adjusted skeleton for text */}
+                <div className="h-5 bg-muted rounded animate-pulse w-5" /> {/* Skeleton for icon */}
               </div>
             ) : (
               <div className="h-5 bg-muted rounded animate-pulse" 
@@ -418,5 +385,4 @@ export function VpsTableSkeletonRow() {
     </TableRow>
   );
 }
-
     
