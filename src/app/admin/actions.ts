@@ -3,10 +3,10 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { ADMIN_SESSION_COOKIE } from '@/lib/constants';
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-export const ADMIN_SESSION_COOKIE = 'admin-session';
 
 export async function login(formData: FormData) {
   const username = formData.get('username');
