@@ -24,7 +24,8 @@ import {
 import { Textarea } from "@/components/ui/textarea"; // If needed for larger note fields, currently using Inputs
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AddVpsInstanceSchema, type AddVpsInstanceInput, addVpsInstance } from "@/app/admin/actions";
+import { addVpsInstance } from "@/app/admin/actions";
+import { AddVpsInstanceSchema, type AddVpsInstanceInput } from "@/app/admin/definitions";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { PlusCircleIcon } from "lucide-react";

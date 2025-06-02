@@ -3,7 +3,8 @@
 
 import type { NextPage } from 'next';
 import { useRouter } from 'next/navigation';
-import { logout, getVpsInstances, deleteVpsInstance, type ActionResult } from '../actions';
+import { logout, getVpsInstances, deleteVpsInstance } from '../actions';
+import type { ActionResult } from '../definitions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AddServerDialog } from '@/components/admin/AddServerDialog';
