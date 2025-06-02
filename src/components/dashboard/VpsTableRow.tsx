@@ -4,8 +4,7 @@ import React, { useState, useEffect } from 'react';
 import type { VpsData } from '@/types/vps-data';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { StatusIndicator } from './StatusIndicator';
-import { UsageBar } from './UsageBar'; // For CPU/RAM/Disk
-import { Progress } from '@/components/ui/progress'; // For Expiry
+import { UsageBar } from './UsageBar'; // Now using UsageBar for Remaining
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -42,7 +41,7 @@ import {
   CalendarIcon,
   ReplaceIcon,
   FileClockIcon,
-  CheckCircle2Icon,
+  CheckCircle2Icon, // For success indication
   CalendarDaysIcon
 } from 'lucide-react';
 import { format, parseISO, isValid, differenceInDays, isFuture, isToday, addMonths, addYears, formatISO, addDays } from 'date-fns';
@@ -101,15 +100,15 @@ const getCycleDetails = (
     } else if (c.includes('quarter')) {
       startDate = addMonths(endDate, -3);
     } else {
-      const daysMatch = c.match(/^(\d+)\s*days?$/); // e.g., "30 days" or "30"
+      const daysMatch = c.match(/^(\d+)\s*days?$/);
       if (daysMatch) {
         startDate = addDays(endDate, -parseInt(daysMatch[1], 10));
       } else {
-         const justDaysNumberMatch = c.match(/^(\d+)$/); // try to parse if it's just a number of days
+         const justDaysNumberMatch = c.match(/^(\d+)$/);
          if (justDaysNumberMatch) {
             startDate = addDays(endDate, -parseInt(justDaysNumberMatch[1], 10));
          } else {
-            return { startDateISO: null, totalDaysInCycle: 0 }; // Unknown cycle
+            return { startDateISO: null, totalDaysInCycle: 0 }; 
          }
       }
     }
@@ -130,7 +129,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
 
   const [isRenewActionedThisSession, setIsRenewActionedThisSession] = useState(false);
   const [initialStateForDisplay, setInitialStateForDisplay] = useState({
-    daysToExpiry: vps.daysToExpiry, // This can be number or string like "Expired"
+    daysToExpiry: vps.daysToExpiry,
     endDateString: vps.note_billing_end_date 
   });
 
@@ -140,17 +139,8 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
         daysToExpiry: vps.daysToExpiry,
         endDateString: vps.note_billing_end_date
     });
-    setIsExpanded(false);
-  }, [vps.id]);
-
-  useEffect(() => {
-    if (!isRenewActionedThisSession) {
-      setInitialStateForDisplay({
-        daysToExpiry: vps.daysToExpiry,
-        endDateString: vps.note_billing_end_date
-      });
-    }
-  }, [vps.daysToExpiry, vps.note_billing_end_date, isRenewActionedThisSession]);
+    // setIsExpanded(false); // Optional: collapse if VPS ID changes. User might prefer to keep it expanded.
+  }, [vps.id]); // Resets when the VPS item itself changes
 
   const formatDaysToExpiryText = (days: number | string): string => {
     if (typeof days === 'string') return days; 
@@ -167,8 +157,8 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     </div>
   );
   
+  // Use current vps prop for renew button eligibility, as this reflects the true state from DB
   const canActuallyRenew = typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0;
-  const billingEndDateFormatted = formatBillingDateShort(vps.note_billing_end_date);
 
   const handleRenew = async () => {
     if (!vps || !vps.id) return;
@@ -176,9 +166,10 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     try {
       const result = await renewVpsInstance(parseInt(vps.id, 10));
       if (result.success) {
-        toast({ title: "Success", description: `VPS ${vps.name} renewal processed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` });
-        setIsRenewActionedThisSession(true);
-        onActionSuccess(); 
+        toast({ title: "Success", description: `VPS ${vps.name} renewal processed. Database updated.` });
+        setIsRenewActionedThisSession(true); // Mark as actioned for this session
+        // Original expiry details are already stored in initialStateForDisplay
+        onActionSuccess(); // Re-fetch data to update underlying vps prop
       } else {
         toast({ title: "Error", description: result.error || "Failed to renew VPS.", variant: "destructive" });
       }
@@ -191,60 +182,44 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   };
 
   // --- Progress Bar Logic ---
-  const displayEndDateForProgress = isRenewActionedThisSession && initialStateForDisplay.endDateString
-    ? initialStateForDisplay.endDateString
+  // Determine which data to use for display (frozen if renewed in this session)
+  const displayEndDateForProgress = isRenewActionedThisSession 
+    ? initialStateForDisplay.endDateString 
     : vps.note_billing_end_date;
   
+  const displayDaysToExpiryForProgress = isRenewActionedThisSession
+    ? initialStateForDisplay.daysToExpiry
+    : vps.daysToExpiry;
+
   const displayCycleForProgress = vps.billingCycle;
 
   const { totalDaysInCycle } = getCycleDetails(displayEndDateForProgress, displayCycleForProgress);
 
-  let daysRemainingForTextDisplay: string | number = vps.daysToExpiry;
-  if (isRenewActionedThisSession && typeof initialStateForDisplay.daysToExpiry === 'number') {
-    // If renewed, use the initial state's daysToExpiry for the text,
-    // ensuring it's recalculated against current date if it was a number
-     if (initialStateForDisplay.endDateString) {
-        const originalEnd = parseISO(initialStateForDisplay.endDateString);
-        if (isValid(originalEnd)) {
-            daysRemainingForTextDisplay = differenceInDays(originalEnd, new Date());
-        } else {
-            daysRemainingForTextDisplay = initialStateForDisplay.daysToExpiry; // Fallback
-        }
-     } else {
-        daysRemainingForTextDisplay = initialStateForDisplay.daysToExpiry; // Fallback
-     }
-
-  } else if (typeof vps.daysToExpiry === 'number') {
-     daysRemainingForTextDisplay = vps.daysToExpiry;
-  } else if (typeof vps.daysToExpiry === 'string') {
-     daysRemainingForTextDisplay = vps.daysToExpiry;
-  }
-
-
   let progressBarPercentage = 0;
   let progressIndicatorColor = "bg-primary"; 
 
-  if (displayEndDateForProgress && totalDaysInCycle > 0 && typeof daysRemainingForTextDisplay === 'number') {
-    const actualDaysLeftForBar = Math.max(0, daysRemainingForTextDisplay);
+  if (displayEndDateForProgress && totalDaysInCycle > 0 && typeof displayDaysToExpiryForProgress === 'number') {
+    const actualDaysLeftForBar = Math.max(0, displayDaysToExpiryForProgress); // Ensure not negative for bar
     progressBarPercentage = Math.min(100, Math.max(0, (actualDaysLeftForBar / totalDaysInCycle) * 100));
 
-    if (daysRemainingForTextDisplay < 0) {
-      progressBarPercentage = 0; // Ensure bar is empty if expired
+    if (displayDaysToExpiryForProgress < 0) { // Text can show "Expired", bar shows 0
+      progressBarPercentage = 0;
       progressIndicatorColor = "bg-muted"; 
-    } else if (daysRemainingForTextDisplay <= 7) {
+    } else if (displayDaysToExpiryForProgress <= 7) {
       progressIndicatorColor = "bg-red-500";
-    } else if (daysRemainingForTextDisplay <= 15) {
+    } else if (displayDaysToExpiryForProgress <= 15) {
       progressIndicatorColor = "bg-orange-500";
     } else {
       progressIndicatorColor = "bg-green-500";
     }
-  } else if (typeof daysRemainingForTextDisplay === 'string' && daysRemainingForTextDisplay.toLowerCase() === 'expired') {
+  } else if (typeof displayDaysToExpiryForProgress === 'string' && displayDaysToExpiryForProgress.toLowerCase() === 'expired') {
       progressBarPercentage = 0;
       progressIndicatorColor = "bg-muted";
-  } else { // N/A or other non-numeric, non-expired string for daysRemainingForTextDisplay
-      progressBarPercentage = 0; // Or 100, depending on desired N/A display
-      progressIndicatorColor = "bg-muted"; // Grey for N/A cases
+  } else { 
+      progressBarPercentage = 0; 
+      progressIndicatorColor = "bg-muted";
   }
+
 
   return (
     <>
@@ -279,15 +254,19 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
         <TableCell className="p-2 text-sm whitespace-nowrap">{vps.uptime}</TableCell>
         <TableCell className="p-2 text-sm whitespace-nowrap">
           <div className="flex items-center gap-1.5 min-w-[150px] sm:min-w-[180px] justify-start">
-            {(displayEndDateForProgress && totalDaysInCycle > 0) || (typeof daysRemainingForTextDisplay === 'string' && daysRemainingForTextDisplay.toLowerCase() === 'expired') ? (
+            {(displayEndDateForProgress && totalDaysInCycle > 0) || (typeof displayDaysToExpiryForProgress === 'string' && displayDaysToExpiryForProgress.toLowerCase() === 'expired') ? (
               <>
-                <Progress value={progressBarPercentage} className="w-16 sm:w-20 h-2" indicatorClassName={progressIndicatorColor} />
-                <span className="text-xs w-10 text-right">{formatDaysToExpiryText(daysRemainingForTextDisplay)}</span>
+                <UsageBar 
+                  percentage={progressBarPercentage} 
+                  className="w-16 sm:w-20 h-3" // Adjusted height for UsageBar
+                  barClassName={progressIndicatorColor} 
+                />
+                <span className="text-xs w-10 text-right">{formatDaysToExpiryText(displayDaysToExpiryForProgress)}</span>
               </>
             ) : (
               <span className="text-xs w-[100px] sm:w-[120px] flex items-center">
                 <CalendarDaysIcon className="h-4 w-4 text-muted-foreground mr-1 shrink-0" />
-                {formatDaysToExpiryText(daysRemainingForTextDisplay)}
+                {formatDaysToExpiryText(displayDaysToExpiryForProgress)}
               </span>
             )}
             
@@ -407,17 +386,25 @@ export function VpsTableSkeletonRow() {
   return (
     <TableRow className="border-b border-border/50">
       {[...Array(13)].map((_, i) => (
-        <TableCell key={i} className="p-2 h-[41px]">
-          <div className="h-5 bg-muted rounded animate-pulse" 
-               style={{ 
-                 width: i === 1 ? '120px' : 
-                        i === 6 ? '100px' : // Adjusted for progress bar + text area
-                        (i >= 10 && i <=12) ? '60px' : '50px' 
-               }} />
-          {i === 6 && <div className="h-2 w-12 ml-2 bg-muted rounded animate-pulse" />} {/* Placeholder for expiry text */}
+        <TableCell key={i} className="p-2 h-[41px]"> {/* Ensure consistent height with row */}
+          <div className="flex items-center h-full"> {/* Ensure content uses full cell height */}
+            {i === 6 ? ( // Special handling for the "Remaining" column with UsageBar
+              <>
+                <div className="h-3 bg-muted rounded animate-pulse w-16 sm:w-20" /> 
+                <div className="h-3 bg-muted rounded animate-pulse w-8 ml-1.5" />
+              </>
+            ) : (
+              <div className="h-5 bg-muted rounded animate-pulse" 
+                   style={{ 
+                     width: i === 1 ? '120px' : 
+                            (i >= 10 && i <=12) ? '60px' : '50px' 
+                   }} />
+            )}
+          </div>
         </TableCell>
       ))}
     </TableRow>
   );
 }
 
+    
