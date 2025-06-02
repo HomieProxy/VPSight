@@ -49,6 +49,7 @@ export interface VpsData {
   daysToExpiry: number | string; // Renamed from expires_in, calculation done in API
   
   // Fields for expanded detail view, populated from admin notes
+  note_billing_end_date?: string | null; // Added for direct date display
   billingCycle?: string | null;
   planBandwidth?: string | null;
   planTrafficType?: string | null; // Mapped to "Both", "Outbound only", "Inbound only"

@@ -14,26 +14,38 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   ServerOffIcon,
-  ActivityIcon,
-  InfoIcon,
-  NetworkIcon,
-  ListTreeIcon,
-  ClockIcon,
-  HardDriveIcon,
-  MemoryStickIcon,
-  CpuIcon as CpuDetailIcon, // Renamed to avoid conflict with CpuIcon in MetricDisplay
-  TagIcon,
-  DollarSignIcon,
-  ShieldQuestionIcon,
-  MapPinIcon
 } from 'lucide-react';
-import { formatDistanceToNow, parseISO } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MetricDisplay } from './MetricDisplay';
+import { formatDistanceToNow, parseISO, format, isValid } from 'date-fns';
 
 interface VpsTableRowProps {
   vps: VpsData;
 }
+
+// Helper function to format full date for display
+const formatFullDate = (isoString: string | null | undefined): string => {
+  if (!isoString) return 'N/A';
+  try {
+    const date = parseISO(isoString);
+    if (!isValid(date)) return 'N/A';
+    return format(date, 'M/d/yyyy, h:mm:ss a'); // Example: 1/15/2025, 4:07:36 PM
+  } catch (e) {
+    console.error("Error formatting date:", isoString, e);
+    return 'Invalid Date';
+  }
+};
+
+// Helper function to format expiry date
+const formatExpiryDate = (isoString: string | null | undefined): string => {
+  if (!isoString) return 'N/A';
+  try {
+    const date = parseISO(isoString);
+    if (!isValid(date)) return 'N/A';
+    return format(date, 'yyyy-MM-dd');
+  } catch (e) {
+    return 'Invalid Date';
+  }
+};
+
 
 export function VpsTableRow({ vps }: VpsTableRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -45,20 +57,12 @@ export function VpsTableRow({ vps }: VpsTableRowProps) {
     return `${days}d`;
   };
   
-  const safeParseDate = (dateString: string | undefined | null) => {
-    if (!dateString) return null;
-    try {
-      return parseISO(dateString);
-    } catch (e) {
-      return null;
-    }
-  };
-
-  const bootTimeDate = safeParseDate(vps.bootTime);
-  const lastActiveDate = safeParseDate(vps.lastActive);
-  
-  const bootTimeAgo = bootTimeDate ? formatDistanceToNow(bootTimeDate, { addSuffix: true }) : 'N/A';
-  const lastActiveAgo = lastActiveDate ? formatDistanceToNow(lastActiveDate, { addSuffix: true }) : 'N/A';
+  const DetailItem: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+    <div className="flex items-start py-0.5">
+      <span className="font-semibold w-32 shrink-0 text-muted-foreground">{label}:</span>
+      <span className="flex-1 break-words">{children}</span>
+    </div>
+  );
 
   return (
     <>
@@ -79,9 +83,8 @@ export function VpsTableRow({ vps }: VpsTableRowProps) {
           <div className="flex items-center gap-1">
             {vps.system === 'Unknown OS' ? 
               <ServerOffIcon className="h-4 w-4 text-destructive" title="System Unknown / Agent Offline"/> : 
-              <ComputerIcon className="h-4 w-4 text-muted-foreground" />
+              <> <ComputerIcon className="h-4 w-4 text-muted-foreground" /> {vps.system} </>
             }
-            {vps.system !== 'Unknown OS' && vps.system}
           </div>
         </TableCell>
         <TableCell className="p-2 text-sm whitespace-nowrap">
@@ -124,70 +127,50 @@ export function VpsTableRow({ vps }: VpsTableRowProps) {
         </TableCell>
       </TableRow>
       {isExpanded && (
-        <TableRow className="bg-muted/10">
+        <TableRow className="bg-muted/5 hover:bg-muted/10">
           <TableCell colSpan={13} className="p-0">
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader><CardTitle className="text-lg flex items-center"><InfoIcon className="mr-2 h-5 w-5 text-primary" />General Info</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <MetricDisplay icon={<TagIcon />} label="Hostname" value={vps.name} />
-                  <MetricDisplay icon={<ComputerIcon />} label="System OS" value={vps.system} />
-                  <MetricDisplay icon={<MapPinIcon />} label="IP Address" value={vps.ip_address || 'N/A'} />
-                  <MetricDisplay icon={<ShieldQuestionIcon />} label="Agent Version" value={vps.agentVersion || 'N/A'} />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-lg flex items-center"><DollarSignIcon className="mr-2 h-5 w-5 text-primary" />Billing & Plan</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <MetricDisplay icon={<DollarSignIcon />} label="Price" value={vps.price} />
-                  <MetricDisplay icon={<CalendarClockIcon />} label="Remaining" value={formatDaysToExpiry(vps.daysToExpiry)} />
-                  <MetricDisplay icon={<InfoIcon />} label="Billing Cycle" value={vps.billingCycle || 'N/A'} />
-                  <MetricDisplay icon={<NetworkIcon />} label="Plan Bandwidth" value={vps.planBandwidth || 'N/A'} />
-                  <MetricDisplay icon={<InfoIcon />} label="Traffic Type" value={vps.planTrafficType || 'N/A'} />
-                </CardContent>
-              </Card>
-               <Card>
-                <CardHeader><CardTitle className="text-lg flex items-center"><CpuDetailIcon className="mr-2 h-5 w-5 text-primary" />Hardware</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <MetricDisplay icon={<CpuDetailIcon />} label="CPU Model" value={vps.cpu.model} />
-                  <MetricDisplay icon={<CpuDetailIcon />} label="CPU Cores" value={vps.cpu.cores.toString()} />
-                  <MetricDisplay icon={<MemoryStickIcon />} label="Total RAM" value={vps.ram.total} />
-                  <MetricDisplay icon={<HardDriveIcon />} label="Total Disk" value={vps.disk.total} />
-                  <MetricDisplay icon={<HardDriveIcon />} label="Swap Status" value={vps.swap.status} />
-                 </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-lg flex items-center"><NetworkIcon className="mr-2 h-5 w-5 text-primary" />Total Network</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <MetricDisplay icon={<ArrowDownIcon className="text-green-500"/>} label="Total IN" value={vps.network.totalIn} />
-                  <MetricDisplay icon={<ArrowUpIcon className="text-red-500"/>} label="Total OUT" value={vps.network.totalOut} />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-lg flex items-center"><ActivityIcon className="mr-2 h-5 w-5 text-primary" />System Activity</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <MetricDisplay icon={<ActivityIcon />} label="Load Avg (1/5/15m)" value={vps.loadAverage.map(l => l.toFixed(2)).join(' / ')} />
-                  <MetricDisplay icon={<ListTreeIcon />} label="Processes" value={vps.processCount.toString()} />
-                  <MetricDisplay icon={<NetworkIcon />} label="Connections" value={`TCP: ${vps.connections.tcp} / UDP: ${vps.connections.udp}`} />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-lg flex items-center"><ClockIcon className="mr-2 h-5 w-5 text-primary" />Timestamps</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <MetricDisplay 
-                    icon={<ClockIcon />} 
-                    label="Boot Time" 
-                    value={bootTimeDate ? bootTimeDate.toLocaleString() : 'N/A'}
-                    unit={bootTimeDate ? `(${bootTimeAgo})` : ''} 
-                  />
-                  <MetricDisplay 
-                    icon={<ClockIcon />} 
-                    label="Last Active" 
-                    value={lastActiveDate ? lastActiveDate.toLocaleString() : 'N/A'}
-                    unit={lastActiveDate ? `(${lastActiveAgo})` : ''}
-                  />
-                </CardContent>
-              </Card>
+            <div className="p-3 text-xs">
+              <div className="space-y-1">
+                <DetailItem label="Plan">
+                  {vps.price}
+                  {vps.billingCycle && vps.billingCycle !== 'N/A' ? ` (${vps.billingCycle})` : ''}
+                  {vps.note_billing_end_date ? ` - Expires: ${formatExpiryDate(vps.note_billing_end_date)}` : (vps.daysToExpiry !== 'N/A' ? ` - ${formatDaysToExpiry(vps.daysToExpiry)}` : '')}
+                  {vps.planBandwidth && vps.planBandwidth !== 'N/A' ? ` - ${vps.planBandwidth}` : ''}
+                  {vps.ip_address ? ` - ${vps.ip_address}` : ''}
+                </DetailItem>
+                <DetailItem label="System">{vps.system}</DetailItem>
+                <DetailItem label="CPU">
+                  {vps.cpu.model} {vps.cpu.cores > 0 ? `${vps.cpu.cores} Core(s)` : ''} ({vps.cpu.usage.toFixed(2)}%)
+                </DetailItem>
+                <DetailItem label="Disk">
+                  {vps.disk.used} / {vps.disk.total} ({vps.disk.percentage.toFixed(2)}%)
+                </DetailItem>
+                <DetailItem label="RAM">
+                  {vps.ram.used} / {vps.ram.total} ({vps.ram.percentage.toFixed(2)}%)
+                </DetailItem>
+                {vps.swap.status === 'OFF' ? (
+                  <DetailItem label="Swap">OFF</DetailItem>
+                ) : (
+                  <DetailItem label="Swap">
+                    {vps.swap.used || '0 MB'} / {vps.swap.total || '0 MB'} 
+                    {vps.swap.percentage !== undefined ? ` (${vps.swap.percentage.toFixed(2)}%)` : ''}
+                  </DetailItem>
+                )}
+                <DetailItem label="Usage (Total)">
+                  IN {vps.network.totalIn} / OUT {vps.network.totalOut}
+                </DetailItem>
+                <DetailItem label="Load Avg">
+                  {vps.loadAverage.map(l => l.toFixed(2)).join(' / ')}
+                </DetailItem>
+                <DetailItem label="Processes">{vps.processCount}</DetailItem>
+                <DetailItem label="Connections">
+                  TCP {vps.connections.tcp} / UDP {vps.connections.udp}
+                </DetailItem>
+                <DetailItem label="Boot Time">{formatFullDate(vps.bootTime)}</DetailItem>
+                <DetailItem label="Last Active">{formatFullDate(vps.lastActive)}</DetailItem>
+                <DetailItem label="Uptime">{vps.uptime}</DetailItem>
+                <DetailItem label="Agent Ver">{vps.agentVersion || 'N/A'}</DetailItem>
+              </div>
             </div>
           </TableCell>
         </TableRow>

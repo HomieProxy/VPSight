@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import type { VpsAdminEntry } from '@/app/admin/definitions';
 import type { VpsData } from '@/types/vps-data';
-import { differenceInDays, parseISO, isFuture, isValid } from 'date-fns';
+import { differenceInDays, parseISO, isFuture, isValid, format } from 'date-fns';
 
 function mapTrafficType(type: number | null | undefined): string {
   if (type === null || type === undefined) return 'N/A';
@@ -29,9 +29,12 @@ export async function GET() {
 
     const vpsDataList: VpsData[] = adminEntries.map(entry => {
       let daysToExpiry: number | string = 'N/A';
+      let formattedEndDate: string | null = null;
+
       if (entry.note_billing_end_date) {
         const endDate = parseISO(entry.note_billing_end_date);
         if (isValid(endDate)) {
+          formattedEndDate = entry.note_billing_end_date; // Pass ISO string
           if (isFuture(endDate)) {
             daysToExpiry = differenceInDays(endDate, new Date());
           } else {
@@ -43,13 +46,12 @@ export async function GET() {
       return {
         id: entry.id.toString(),
         name: entry.name,
-        // Simplified status: if IP exists, assume online for now. Agent should update this.
         status: entry.ip_address ? 'online' : 'offline', 
-        system: entry.type || 'Unknown OS', // Keep original type as system
-        location: entry.country_region || 'N/A', // Mapped country_region to location
+        system: entry.type || 'Unknown OS',
+        location: entry.country_region || 'N/A',
         ip_address: entry.ip_address || null,
         price: entry.note_billing_amount || 'N/A',
-        uptime: 'N/A', // Placeholder
+        uptime: 'N/A', // Placeholder - agent should report this
         load: 0, // Placeholder
         nicDown: '0 KB/s', // Placeholder
         nicUp: '0 KB/s', // Placeholder
@@ -68,9 +70,11 @@ export async function GET() {
           total: '0 MB', // Placeholder
           percentage: 0, // Placeholder
         },
-        swap: {
-          status: 'OFF', // Placeholder
-          percentage: 0,
+        swap: { // Agent should provide these details if swap is active
+          status: 'OFF', // Placeholder, agent to update
+          used: '0 MB', // Placeholder
+          total: '0 MB', // Placeholder
+          percentage: 0, // Placeholder
         },
         network: {
           totalIn: '0 GB', // Placeholder for total, agent should update
@@ -88,7 +92,7 @@ export async function GET() {
         lastActive: entry.created_at, // Use created_at as a stand-in for now
         daysToExpiry: daysToExpiry,
         
-        // Additional details from notes
+        note_billing_end_date: formattedEndDate,
         billingCycle: entry.note_billing_cycle || 'N/A',
         planBandwidth: entry.note_plan_bandwidth || 'N/A',
         planTrafficType: mapTrafficType(entry.note_plan_traffic_type),
