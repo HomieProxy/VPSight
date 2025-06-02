@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { MetricDisplay } from './MetricDisplay';
 import type { VpsData } from '@/types/vps-data';
-import { GaugeIcon, HardDriveIcon, MemoryStickIcon, LayersIcon } from 'lucide-react';
+import { GaugeIcon, HardDriveIcon, MemoryStickIcon, LayersIcon, CpuIcon } from 'lucide-react';
 
 interface ResourceUsageCardProps {
   data: VpsData;
