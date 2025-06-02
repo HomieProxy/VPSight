@@ -44,7 +44,7 @@ import {
   FileClockIcon,
   CheckCircle2Icon,
 } from 'lucide-react';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, differenceInDays, isFuture, isToday } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface VpsTableRowProps {
@@ -79,15 +79,38 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRenewDialogOpen, setIsRenewDialogOpen] = useState(false);
   const [isRenewing, setIsRenewing] = useState(false);
-  const [renewalJustCompleted, setRenewalJustCompleted] = useState(false);
   const { toast } = useToast();
 
-  // Reset renewalJustCompleted if vps.id changes (e.g. list is reordered/filtered)
+  const [isRenewActionedThisSession, setIsRenewActionedThisSession] = useState(false);
+  const [initialStateForDisplay, setInitialStateForDisplay] = useState({
+    daysToExpiry: vps.daysToExpiry,
+    endDateString: vps.note_billing_end_date
+  });
+
+  // Effect to reset states when the VPS item itself changes (e.g. different vps.id)
   useEffect(() => {
-    setRenewalJustCompleted(false);
+    setIsRenewActionedThisSession(false);
+    setInitialStateForDisplay({
+        daysToExpiry: vps.daysToExpiry,
+        endDateString: vps.note_billing_end_date
+    });
+    setIsExpanded(false); // Also collapse on item change
   }, [vps.id]);
 
-  const formatDaysToExpiry = (days: number | string) => {
+  // Effect to update initial state for display if props change,
+  // but ONLY if a renewal hasn't been actioned in this session for the current vps.id.
+  // This allows the displayed "Remaining" days to "freeze" after a renewal action.
+  useEffect(() => {
+    if (!isRenewActionedThisSession) {
+      setInitialStateForDisplay({
+        daysToExpiry: vps.daysToExpiry,
+        endDateString: vps.note_billing_end_date
+      });
+    }
+  }, [vps.daysToExpiry, vps.note_billing_end_date, isRenewActionedThisSession]);
+
+
+  const formatDaysToExpiryText = (days: number | string) => {
     if (typeof days === 'string') return days; 
     if (days < 0) return 'Expired';
     if (days === 0) return 'Today';
@@ -102,7 +125,29 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     </div>
   );
 
-  const canRenew = typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0;
+  // Determine current "Remaining" days value for display
+  let daysValueForDisplayLogic: string | number;
+  if (isRenewActionedThisSession && initialStateForDisplay.endDateString) {
+      const today = new Date();
+      const originalEnd = parseISO(initialStateForDisplay.endDateString);
+      if (isValid(originalEnd)) {
+          if (isFuture(originalEnd) || isToday(originalEnd)) {
+              daysValueForDisplayLogic = differenceInDays(originalEnd, today);
+          } else {
+              daysValueForDisplayLogic = "Expired"; // Original has expired
+          }
+      } else {
+          // Fallback if original date was invalid, use initial days
+          daysValueForDisplayLogic = initialStateForDisplay.daysToExpiry;
+      }
+  } else {
+      // Default to current prop if not renewed in this session, or if initial data was insufficient
+      daysValueForDisplayLogic = vps.daysToExpiry;
+  }
+
+
+  // Determine if the "Renew" button should be shown based on the *actual current* data from props (after any re-fetch)
+  const canActuallyRenew = typeof vps.daysToExpiry === 'number' && vps.daysToExpiry <= 15 && vps.daysToExpiry >= 0;
   const billingEndDateFormatted = formatBillingDateShort(vps.note_billing_end_date);
 
   const handleRenew = async () => {
@@ -111,9 +156,9 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
     try {
       const result = await renewVpsInstance(parseInt(vps.id, 10));
       if (result.success) {
-        toast({ title: "Success", description: `VPS ${vps.name} renewed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` });
-        setRenewalJustCompleted(true); // Set success flag for this row
-        onActionSuccess(); 
+        toast({ title: "Success", description: `VPS ${vps.name} renewal processed. New expiry: ${formatBillingDateShort(result.data?.newEndDate)}` });
+        setIsRenewActionedThisSession(true); // Mark renewal actioned
+        onActionSuccess(); // Re-fetch data; vps prop will update, affecting canActuallyRenew
       } else {
         toast({ title: "Error", description: result.error || "Failed to renew VPS.", variant: "destructive" });
       }
@@ -124,7 +169,6 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
       setIsRenewDialogOpen(false);
     }
   };
-
 
   return (
     <>
@@ -160,11 +204,11 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
         <TableCell className="p-2 text-sm whitespace-nowrap">
           <div className="flex items-center gap-1.5 min-w-[150px] justify-start">
             <CalendarClockIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="mr-1">{formatDaysToExpiry(vps.daysToExpiry)}</span>
-            {renewalJustCompleted && !canRenew && ( // Show check if renewed and no longer renewable
-                <CheckCircle2Icon className="h-4 w-4 text-green-500" title="Renewed successfully" />
-            )}
-            {canRenew && !renewalJustCompleted && (
+            <span className="mr-1">{formatDaysToExpiryText(daysValueForDisplayLogic)}</span>
+            
+            {isRenewActionedThisSession ? (
+                <CheckCircle2Icon className="h-4 w-4 text-green-500" title="Renewal processed for this period" />
+            ) : canActuallyRenew ? (
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -176,22 +220,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
                 {isRenewing ? <Loader2Icon className="h-3 w-3 animate-spin" /> : <RefreshCcwIcon className="h-3 w-3"/>}
                 <span className="ml-1 hidden sm:inline">Renew</span>
               </Button>
-            )}
-             {renewalJustCompleted && canRenew && ( // If still renewable after completion (e.g. very short cycle), show both
-                <>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-6 px-1.5 py-0 text-xs"
-                    onClick={(e) => { e.stopPropagation(); setIsRenewDialogOpen(true); }}
-                    disabled={isRenewing}
-                    title="Renew Subscription Again"
-                >
-                    {isRenewing ? <Loader2Icon className="h-3 w-3 animate-spin" /> : <RefreshCcwIcon className="h-3 w-3"/>}
-                </Button>
-                <CheckCircle2Icon className="h-4 w-4 text-green-500 ml-1" title="Renewed successfully" />
-                </>
-            )}
+            ) : null}
           </div>
         </TableCell>
         <TableCell className="p-2 text-sm text-center whitespace-nowrap">{typeof vps.load === 'number' ? vps.load.toFixed(2) : 'N/A'}</TableCell>
@@ -226,7 +255,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
               <DetailItem icon={<DollarSignIcon size={14}/>} label="Plan">
                 {vps.price || 'N/A'}
                 {vps.billingCycle && vps.billingCycle !== 'N/A' ? ` (${vps.billingCycle})` : ''}
-                {billingEndDateFormatted ? ` - Expires: ${billingEndDateFormatted}` : (vps.daysToExpiry !== 'N/A' ? ` - ${formatDaysToExpiry(vps.daysToExpiry)}` : '')}
+                {billingEndDateFormatted ? ` - Expires: ${billingEndDateFormatted}` : (vps.daysToExpiry !== 'N/A' ? ` - ${formatDaysToExpiryText(vps.daysToExpiry)}` : '')}
                 {vps.planBandwidth && vps.planBandwidth !== 'N/A' ? ` - BW: ${vps.planBandwidth}` : ''}
                 {vps.planTrafficType && vps.planTrafficType !== 'N/A' ? ` - Traffic: ${vps.planTrafficType}` : ''}
                 {vps.ip_address ? ` - IP: ${vps.ip_address}` : ''}
@@ -274,7 +303,7 @@ export function VpsTableRow({ vps, onActionSuccess }: VpsTableRowProps) {
             <AlertDialogDescription>
               Are you sure you want to renew the subscription for VPS: <strong>{vps?.name}</strong>?
               This will extend the billing end date based on its current cycle: <strong>{vps?.billingCycle || 'N/A'}</strong>.
-              Current expiry: {billingEndDateFormatted || formatDaysToExpiry(vps.daysToExpiry)}.
+              Current expiry: {formatBillingDateShort(vps.note_billing_end_date) || formatDaysToExpiryText(vps.daysToExpiry)}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
