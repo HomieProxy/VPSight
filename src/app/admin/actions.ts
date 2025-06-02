@@ -71,7 +71,7 @@ export async function addVpsInstance(input: AddVpsInstanceInput): Promise<Action
       name,
       type,
       group_name,
-      country_region, // ip_address removed from form
+      country_region,
       note_billing_start_date,
       note_billing_end_date,
       note_billing_cycle,
@@ -80,13 +80,11 @@ export async function addVpsInstance(input: AddVpsInstanceInput): Promise<Action
       note_plan_traffic_type
     } = validation.data;
 
-    // Generate secret (16 hex characters)
     const secret = crypto.randomBytes(8).toString('hex').toUpperCase();
     
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
     const install_command = `curl -sSL ${appUrl}/install_agent.sh | sudo bash -s ${secret}`;
 
-    // IP address will be NULL initially, to be reported by agent
     const result = db.prepare(
       `INSERT INTO vps_instances (
         name, type, group_name, country_region, secret, install_command, ip_address,
@@ -113,7 +111,6 @@ export async function addVpsInstance(input: AddVpsInstanceInput): Promise<Action
 
 export async function getVpsInstances(): Promise<VpsAdminEntry[]> {
   try {
-    // Ensure all fields from VpsAdminEntry are selected
     const vpsList: VpsAdminEntry[] = db.prepare(`
       SELECT 
         id, name, type, group_name, ip_address, country_region, agent_version, 
@@ -162,17 +159,62 @@ export async function getVpsInstanceById(id: number): Promise<VpsAdminEntry | nu
 }
 
 export async function updateVpsInstance(input: EditVpsInstanceInput): Promise<ActionResult> {
-  // Placeholder for actual update logic
-  // This would involve validating input with EditVpsInstanceSchema and updating the DB
-  console.log("Update VPS Instance (not implemented yet):", input);
-  await new Promise(resolve => setTimeout(resolve, 500)); // Simulate async operation
+  try {
+    const validation = EditVpsInstanceSchema.safeParse(input);
+    if (!validation.success) {
+      return { success: false, error: validation.error.errors.map(e => e.message).join(', ') };
+    }
 
-  // Example:
-  // const validation = EditVpsInstanceSchema.safeParse(input);
-  // if (!validation.success) { /* ... handle error ... */ }
-  // const { id, ...dataToUpdate } = validation.data;
-  // db.prepare(...).run(..., id);
-  
-  revalidatePath('/admin/dashboard');
-  return { success: true, error: "Edit functionality is not fully implemented yet." };
+    const {
+      id,
+      name,
+      type,
+      group_name,
+      country_region,
+      note_billing_start_date,
+      note_billing_end_date,
+      note_billing_cycle,
+      note_billing_amount,
+      note_plan_bandwidth,
+      note_plan_traffic_type
+    } = validation.data;
+
+    const result = db.prepare(
+      `UPDATE vps_instances SET
+        name = ?,
+        type = ?,
+        group_name = ?,
+        country_region = ?,
+        note_billing_start_date = ?,
+        note_billing_end_date = ?,
+        note_billing_cycle = ?,
+        note_billing_amount = ?,
+        note_plan_bandwidth = ?,
+        note_plan_traffic_type = ?
+      WHERE id = ?`
+    ).run(
+      name,
+      type || null,
+      group_name || null,
+      country_region || null,
+      note_billing_start_date || null,
+      note_billing_end_date || null,
+      note_billing_cycle || null,
+      note_billing_amount || null,
+      note_plan_bandwidth || null,
+      note_plan_traffic_type !== undefined ? note_plan_traffic_type : null,
+      id
+    );
+
+    if (result.changes === 0) {
+      return { success: false, error: 'VPS instance not found or no changes made.' };
+    }
+
+    revalidatePath('/admin/dashboard');
+    return { success: true };
+
+  } catch (error: any) {
+    console.error('Error updating VPS instance:', error);
+    return { success: false, error: 'Failed to update VPS instance. ' + error.message };
+  }
 }

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { updateVpsInstance, getVpsInstanceById } from "@/app/admin/actions"; // Assuming updateVpsInstance exists
+import { updateVpsInstance } from "@/app/admin/actions";
 import { EditVpsInstanceSchema, type EditVpsInstanceInput, type VpsAdminEntry } from "@/app/admin/definitions";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -38,12 +38,13 @@ interface EditServerDialogProps {
 export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSuccess }: EditServerDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingVps, setIsLoadingVps] = useState(false);
+  // isLoadingVps state can be removed if initialVps is always provided fully populated
+  // const [isLoadingVps, setIsLoadingVps] = useState(false); 
 
   const form = useForm<EditVpsInstanceInput>({
     resolver: zodResolver(EditVpsInstanceSchema),
-    defaultValues: { // Default values will be overridden by fetched VPS data
-      id: 0, // Will be set from vps prop
+    defaultValues: {
+      id: 0,
       name: "",
       type: "",
       group_name: "",
@@ -53,13 +54,12 @@ export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSucces
       note_billing_cycle: "",
       note_billing_amount: "",
       note_plan_bandwidth: "",
-      note_plan_traffic_type: 0,
+      note_plan_traffic_type: undefined, // Default to undefined for optional select
     },
   });
 
   useEffect(() => {
     if (open && initialVps) {
-        // Pre-fill form with existing VPS data when dialog opens and VPS data is available
         form.reset({
             id: initialVps.id,
             name: initialVps.name || "",
@@ -71,10 +71,11 @@ export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSucces
             note_billing_cycle: initialVps.note_billing_cycle || "",
             note_billing_amount: initialVps.note_billing_amount || "",
             note_plan_bandwidth: initialVps.note_plan_bandwidth || "",
+            // Ensure that null from DB becomes undefined for the form if select expects undefined for no value
             note_plan_traffic_type: initialVps.note_plan_traffic_type === null ? undefined : initialVps.note_plan_traffic_type,
         });
     } else if (!open) {
-        form.reset(); // Reset form when dialog closes
+        form.reset(form.formState.defaultValues); // Reset to default values when closing
     }
   }, [open, initialVps, form]);
 
@@ -83,11 +84,10 @@ export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSucces
     if (!initialVps) return;
     setIsSubmitting(true);
     try {
-      // Ensure ID is part of the data sent to the server action
       const result = await updateVpsInstance({ ...data, id: initialVps.id }); 
       if (result.success) {
         toast({ title: "Success", description: "VPS instance updated successfully." });
-        onOpenChange(false);
+        onOpenChange(false); // Close dialog on success
         if (onSuccess) onSuccess();
       } else {
         toast({ title: "Error", description: result.error || "Failed to update VPS instance.", variant: "destructive" });
@@ -98,8 +98,12 @@ export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSucces
       setIsSubmitting(false);
     }
   };
+  
+  const handleCloseDialog = () => {
+    onOpenChange(false);
+  };
 
-  if (!initialVps && open) { // Show loading or error if VPS data isn't available when dialog is open
+  if (!initialVps && open) { 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
@@ -109,6 +113,9 @@ export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSucces
                 <div className="flex justify-center items-center py-10">
                     <Loader2Icon className="h-8 w-8 animate-spin text-primary" />
                 </div>
+                 <DialogFooter>
+                    <Button variant="outline" onClick={handleCloseDialog}>Cancel</Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
@@ -126,11 +133,6 @@ export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSucces
             Modify the details for this VPS instance. IP address is reported by the agent and not directly editable here.
           </DialogDescription>
         </DialogHeader>
-        {isLoadingVps ? (
-            <div className="flex justify-center items-center py-10">
-                <Loader2Icon className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        ) : (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -181,9 +183,8 @@ export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSucces
             <div className="space-y-2">
               <Label htmlFor="note_plan_traffic_type">Traffic Type</Label>
               <Select
-                onValueChange={(value) => form.setValue("note_plan_traffic_type", parseInt(value))}
-                value={form.watch("note_plan_traffic_type")?.toString()} // Ensure value is watched for dynamic updates
-                defaultValue={initialVps?.note_plan_traffic_type?.toString() || "0"}
+                onValueChange={(value) => form.setValue("note_plan_traffic_type", parseInt(value, 10), { shouldValidate: true })}
+                value={form.watch("note_plan_traffic_type")?.toString()} // Controlled component
               >
                 <SelectTrigger id="note_plan_traffic_type">
                   <SelectValue placeholder="Select traffic type" />
@@ -194,21 +195,20 @@ export function EditServerDialog({ open, onOpenChange, vps: initialVps, onSucces
                   <SelectItem value="2">Inbound only</SelectItem>
                 </SelectContent>
               </Select>
+               {form.formState.errors.note_plan_traffic_type && <p className="text-xs text-destructive">{form.formState.errors.note_plan_traffic_type.message}</p>}
             </div>
           </div>
           <DialogFooter className="pt-6">
             <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={() => { form.reset(); onOpenChange(false); }}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={handleCloseDialog}>Cancel</Button>
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || isLoadingVps}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
               {isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>
-        )}
       </DialogContent>
     </Dialog>
   );
 }
-
