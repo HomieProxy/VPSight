@@ -2,7 +2,7 @@
 'use client';
 
 import type { VpsData } from '@/types/vps-data';
-import { Table, TableBody, TableCaption, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { VpsTableRow, VpsTableSkeletonRow } from './VpsTableRow';
 import { ServerOffIcon } from 'lucide-react';
 
