@@ -1,13 +1,11 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DashboardHeader } from '@/components/dashboard/Header';
 import { VpsTable } from '@/components/dashboard/VpsTable';
 import type { VpsData } from '@/types/vps-data';
 
-// Explicitly define props that Next.js pages can receive, even if not used directly.
-// For the root page, params is typically empty.
 interface VpsDashboardPageProps {
   params?: Record<string, string | string[] | undefined>;
   searchParams?: { [key: string]: string | string[] | undefined };
@@ -19,31 +17,30 @@ export default function VpsDashboardPage({ params, searchParams }: VpsDashboardP
   const [error, setError] = useState<string | null>(null);
   const [currentYear, setCurrentYear] = useState<number | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await fetch('/api/vps-list');
-        if (!response.ok) {
-          throw new Error(`Failed to fetch VPS data: ${response.statusText}`);
-        }
-        const data: VpsData[] = await response.json();
-        setVpsList(data);
-      } catch (err: any) {
-        console.error("Error fetching VPS data:", err);
-        setError(err.message || 'An unknown error occurred while fetching data.');
-        setVpsList([]); 
-      } finally {
-        setIsLoading(false);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/vps-list');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch VPS data: ${response.statusText}`);
       }
-    };
-
-    fetchData();
+      const data: VpsData[] = await response.json();
+      setVpsList(data);
+    } catch (err: any) {
+      console.error("Error fetching VPS data:", err);
+      setError(err.message || 'An unknown error occurred while fetching data.');
+      setVpsList([]); 
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    // Ensure current year is determined on the client side after hydration
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
     setCurrentYear(new Date().getFullYear());
   }, []);
 
@@ -57,7 +54,7 @@ export default function VpsDashboardPage({ params, searchParams }: VpsDashboardP
               <span className="font-medium">Error!</span> {error}
             </div>
           )}
-          <VpsTable vpsList={vpsList} isLoading={isLoading} />
+          <VpsTable vpsList={vpsList} isLoading={isLoading} onActionSuccess={fetchData} />
         </div>
       </main>
       <footer className="text-center p-4 text-sm text-muted-foreground mt-8">

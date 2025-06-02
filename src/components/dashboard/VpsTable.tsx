@@ -10,9 +10,10 @@ import React from 'react';
 interface VpsTableProps {
   vpsList: VpsData[] | null;
   isLoading: boolean;
+  onActionSuccess: () => void; // Callback for after actions like renewal
 }
 
-export function VpsTable({ vpsList, isLoading }: VpsTableProps) {
+export function VpsTable({ vpsList, isLoading, onActionSuccess }: VpsTableProps) {
   return (
     <div className="rounded-lg border overflow-hidden bg-card shadow">
       <Table className="min-w-full">
@@ -21,13 +22,13 @@ export function VpsTable({ vpsList, isLoading }: VpsTableProps) {
           */}<TableHead className="p-2 text-center w-16">Status</TableHead>{/*
           */}<TableHead className="p-2">Name</TableHead>{/*
           */}<TableHead className="p-2">System</TableHead>{/*
-          */}<TableHead className="p-2">Location</TableHead>{/* Changed from Country/Region */}{/*
+          */}<TableHead className="p-2">Location</TableHead>{/*
           */}<TableHead className="p-2">Price</TableHead>{/*
           */}<TableHead className="p-2">Uptime</TableHead>{/*
-          */}<TableHead className="p-2">Remaining</TableHead>{/* Changed from Expires In */}{/*
+          */}<TableHead className="p-2 min-w-[150px]">Remaining</TableHead>{/*
           */}<TableHead className="p-2 text-center">Load</TableHead>{/*
           */}<TableHead className="p-2 whitespace-nowrap">NIC ↓ | ↑</TableHead>{/*
-          */}<TableHead className="p-2 whitespace-nowrap">Usage ↓ | ↑</TableHead>{/* Removed (Month) */}{/*
+          */}<TableHead className="p-2 whitespace-nowrap">Usage ↓ | ↑</TableHead>{/*
           */}<TableHead className="p-2 w-24">CPU</TableHead>{/*
           */}<TableHead className="p-2 w-24">RAM</TableHead>{/*
           */}<TableHead className="p-2 w-24">Disk</TableHead>
@@ -36,7 +37,7 @@ export function VpsTable({ vpsList, isLoading }: VpsTableProps) {
         <TableBody>
           {isLoading && [...Array(3)].map((_, i) => <VpsTableSkeletonRow key={`skeleton-${i}`} />)}
           {!isLoading && vpsList && vpsList.length > 0 && vpsList.map((vps) => (
-            <VpsTableRow key={vps.id} vps={vps} />
+            <VpsTableRow key={vps.id} vps={vps} onActionSuccess={onActionSuccess} />
           ))}
           {!isLoading && (!vpsList || vpsList.length === 0) && (
             <TableRow>

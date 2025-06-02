@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import type { AddVpsInstanceInput, ActionResult, VpsAdminEntry, EditVpsInstanceInput } from './definitions';
 import { AddVpsInstanceSchema, EditVpsInstanceSchema } from './definitions';
+import { addMonths, addYears, format, parseISO, isValid } from 'date-fns';
 
 export async function login(formData: FormData): Promise<ActionResult> {
   const username = formData.get('username') as string;
@@ -134,6 +135,8 @@ export async function deleteVpsInstance(id: number): Promise<ActionResult> {
       return { success: false, error: 'VPS instance not found or already deleted.' };
     }
     revalidatePath('/admin/dashboard');
+    revalidatePath('/'); // Revalidate public dashboard
+    revalidatePath('/api/vps-list'); // Revalidate API
     return { success: true };
   } catch (error) {
     console.error('Error deleting VPS instance:', error);
@@ -211,10 +214,72 @@ export async function updateVpsInstance(input: EditVpsInstanceInput): Promise<Ac
     }
 
     revalidatePath('/admin/dashboard');
+    revalidatePath('/'); // Revalidate public dashboard
+    revalidatePath('/api/vps-list'); // Revalidate API
     return { success: true };
 
   } catch (error: any) {
     console.error('Error updating VPS instance:', error);
     return { success: false, error: 'Failed to update VPS instance. ' + error.message };
+  }
+}
+
+export async function renewVpsInstance(id: number): Promise<ActionResult> {
+  try {
+    const vps = await getVpsInstanceById(id);
+    if (!vps) {
+      return { success: false, error: 'VPS instance not found.' };
+    }
+
+    if (!vps.note_billing_end_date || !vps.note_billing_cycle) {
+      return { success: false, error: 'Billing end date or cycle not set for this VPS.' };
+    }
+
+    const currentEndDate = parseISO(vps.note_billing_end_date);
+    if (!isValid(currentEndDate)) {
+        return { success: false, error: 'Invalid current billing end date.' };
+    }
+
+    let newEndDate: Date;
+    const cycle = vps.note_billing_cycle.toLowerCase();
+
+    if (cycle.includes('month')) {
+      const monthsMatch = cycle.match(/(\d+)\s*month/);
+      const numMonths = monthsMatch ? parseInt(monthsMatch[1], 10) : 1;
+      newEndDate = addMonths(currentEndDate, numMonths);
+    } else if (cycle.includes('year') || cycle.includes('annu')) {
+      const yearsMatch = cycle.match(/(\d+)\s*year/);
+      const numYears = yearsMatch ? parseInt(yearsMatch[1], 10) : 1;
+      if (cycle.includes('bi-annu') || cycle.includes('biannu')) { // specific for "biannually"
+        newEndDate = addYears(currentEndDate, 2);
+      } else {
+        newEndDate = addYears(currentEndDate, numYears);
+      }
+    } else if (cycle.includes('quarter')) {
+        newEndDate = addMonths(currentEndDate, 3);
+    }
+    // Add more cycle parsing logic here (e.g., "X days", "X weeks")
+    else {
+      return { success: false, error: `Unsupported billing cycle: ${vps.note_billing_cycle}` };
+    }
+
+    const formattedNewEndDate = format(newEndDate, 'yyyy-MM-dd');
+
+    const result = db.prepare(
+      'UPDATE vps_instances SET note_billing_end_date = ? WHERE id = ?'
+    ).run(formattedNewEndDate, id);
+
+    if (result.changes === 0) {
+      return { success: false, error: 'Failed to update VPS instance for renewal.' };
+    }
+
+    revalidatePath('/admin/dashboard'); // If admin views this info
+    revalidatePath('/'); // Revalidate public dashboard
+    revalidatePath('/api/vps-list'); // Revalidate API that serves public dashboard
+    return { success: true, data: { newEndDate: formattedNewEndDate } };
+
+  } catch (error: any) {
+    console.error('Error renewing VPS instance:', error);
+    return { success: false, error: 'Failed to renew VPS instance. ' + error.message };
   }
 }
