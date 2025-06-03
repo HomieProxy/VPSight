@@ -143,4 +143,4 @@ Contributions are welcome! Please feel free to submit a pull request or open an 
 
 ## License
 
-This project is open-source. (You can add a specific license file like `LICENSE.md` if you wish).
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
