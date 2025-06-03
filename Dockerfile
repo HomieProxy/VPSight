@@ -1,56 +1,74 @@
-# Stage 1: Install dependencies
-FROM node:20-alpine AS deps
+
+# --- Base Stage with Node.js ---
+# Use a specific version of Node.js for consistency, Alpine for smaller size
+FROM node:20-alpine AS base
+LABEL authors="Your Name <your.email@example.com>"
+
+# Set working directory
 WORKDIR /app
 
-# Prevent messages about new major versions of npm
-ENV npm_config_update_notifier false
+# --- Dependencies Stage ---
+# This stage is dedicated to installing dependencies and will be cached if package.json/lock changes.
+FROM base AS deps
+WORKDIR /app
 
+# Copy package.json and package-lock.json (or yarn.lock)
 COPY package.json package-lock.json* ./
-# Ensure clean installs based on lockfile
-RUN npm ci
 
-# Stage 2: Build the application
-FROM node:20-alpine AS builder
+# Install dependencies using npm ci for cleaner installs if package-lock.json exists
+RUN npm ci --omit=dev || npm install --omit=dev
+
+
+# --- Builder Stage ---
+# This stage builds the Next.js application.
+FROM base AS builder
 WORKDIR /app
+
+# Copy dependencies from the 'deps' stage
 COPY --from=deps /app/node_modules ./node_modules
+# Copy all source code
 COPY . .
 
-# Disable Next.js telemetry during build
-ENV NEXT_TELEMETRY_DISABLED 1
-ENV NODE_ENV production
-
-# Generate the production build
+# Build the Next.js application
+# NEXT_PUBLIC_APP_URL is not strictly needed at build time unless used in getStaticProps/Paths without fallback
+# It's more of a runtime concern for client-side code or server-side generation.
 RUN npm run build
 
-# Stage 3: Production image
-FROM node:20-alpine AS runner
+
+# --- Final Production Image ---
+FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
-# Disable Next.js telemetry during runtime
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV=production
+# Uncomment the next line if you want to disable "npm install --omit=dev" and install all dependencies.
+# ENV NODE_ENV=development
 
-# Create a non-root user for security
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Create the non-root user and group
+# Using -S for system user/group, -u and -g for specific IDs if needed for permissions consistency
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
 
-# Copy necessary files from the builder stage
-# Ensure correct ownership for the non-root user
+# Copy built artifacts from the builder stage
+# These are organized for Next.js standalone output
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+# The standalone output copies server.js and .next/standalone properly
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/db ./db # Copy the database directory
+
+# Create the database directory for the application to use at runtime
+# This directory should be mapped to a volume in docker-compose or docker run
+# to persist the database.
+RUN mkdir -p db && chown nextjs:nodejs db
 
 # Set the user to the non-root user
 USER nextjs
 
+# Expose the port the app runs on
 EXPOSE 3000
-# Set default port, Next.js will use this if PORT env var is not set by the platform
-ENV PORT 3000
 
-# Environment variables for initial admin user (db.ts)
-# It's recommended to set these at runtime via `docker run -e VAR=value`
-# ENV INITIAL_ADMIN_USERNAME admin
-# ENV INITIAL_ADMIN_PASSWORD changeme
+# Set the default port for the environment (Next.js will respect this)
+ENV PORT=3000
+# ENV HOSTNAME="0.0.0.0" # Not strictly necessary for Next.js `start` with standalone output as server.js handles binding
 
+# The command to run the application using the standalone server.js
 CMD ["node", "server.js"]
