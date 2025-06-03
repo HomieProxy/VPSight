@@ -7,11 +7,11 @@ import { VpsTable } from '@/components/dashboard/VpsTable';
 import type { VpsData } from '@/types/vps-data';
 
 interface VpsDashboardPageProps {
-  params?: Record<string, string | string[] | undefined>;
-  searchParams?: { [key: string]: string | string[] | undefined };
+  // params?: Record<string, string | string[] | undefined>; // Removed
+  // searchParams?: { [key: string]: string | string[] | undefined }; // Removed
 }
 
-export default function VpsDashboardPage({ params, searchParams }: VpsDashboardPageProps) {
+export default function VpsDashboardPage(/* { params, searchParams }: VpsDashboardPageProps */) {
   const [vpsList, setVpsList] = useState<VpsData[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

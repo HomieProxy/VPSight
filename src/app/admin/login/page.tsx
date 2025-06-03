@@ -14,11 +14,11 @@ import { KeyRoundIcon, LogInIcon } from 'lucide-react';
 
 // Explicitly define props that Next.js pages can receive
 interface AdminLoginPageProps {
-  params?: Record<string, string | string[] | undefined>;
-  searchParams?: { [key: string]: string | string[] | undefined };
+  // params?: Record<string, string | string[] | undefined>; // Removed
+  // searchParams?: { [key: string]: string | string[] | undefined }; // Removed
 }
 
-const AdminLoginPage: NextPage<AdminLoginPageProps> = ({ params, searchParams }) => {
+const AdminLoginPage: NextPage<AdminLoginPageProps> = (/* { params, searchParams } */) => {
   const router = useRouter();
   const { toast } = useToast();
   const [username, setUsername] = useState('');
