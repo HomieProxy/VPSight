@@ -1,6 +1,7 @@
 
 import type { Metadata } from 'next';
 import { Toaster } from "@/components/ui/toaster";
+import { NextThemesProvider } from '@/components/providers/NextThemesProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="UTF-8" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -23,8 +24,15 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css" />
       </head>
       <body className="font-body antialiased">
-        {children}
-        <Toaster />
+        <NextThemesProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+        </NextThemesProvider>
       </body>
     </html>
   );

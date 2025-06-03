@@ -1,6 +1,7 @@
 import { GaugeCircleIcon, ShieldCheckIcon } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 export function DashboardHeader() {
   return (
@@ -12,12 +13,15 @@ export function DashboardHeader() {
             VPSight
           </h1>
         </div>
-        <Link href="/admin/login" passHref>
-          <Button variant="outline" size="sm">
-            <ShieldCheckIcon className="mr-2 h-4 w-4" />
-            Admin Login
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link href="/admin/login" passHref>
+            <Button variant="outline" size="sm">
+              <ShieldCheckIcon className="mr-2 h-4 w-4" />
+              Admin Login
+            </Button>
+          </Link>
+        </div>
       </div>
     </header>
   );

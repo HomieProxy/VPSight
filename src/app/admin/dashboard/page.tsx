@@ -8,7 +8,8 @@ import type { ActionResult, VpsAdminEntry } from '../definitions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AddServerDialog } from '@/components/admin/AddServerDialog';
-import { EditServerDialog } from '@/components/admin/EditServerDialog'; // New
+import { EditServerDialog } from '@/components/admin/EditServerDialog';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 import {
   LogOutIcon,
   LayoutDashboardIcon,
@@ -43,8 +44,8 @@ const AdminDashboardPage: NextPage = () => {
   const [vpsEntries, setVpsEntries] = useState<VpsAdminEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddServerDialogOpen, setIsAddServerDialogOpen] = useState(false);
-  const [isEditServerDialogOpen, setIsEditServerDialogOpen] = useState(false); // New
-  const [selectedVpsToEdit, setSelectedVpsToEdit] = useState<VpsAdminEntry | null>(null); // New
+  const [isEditServerDialogOpen, setIsEditServerDialogOpen] = useState(false); 
+  const [selectedVpsToEdit, setSelectedVpsToEdit] = useState<VpsAdminEntry | null>(null); 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedVpsIdToDelete, setSelectedVpsIdToDelete] = useState<number | null>(null);
 
@@ -53,7 +54,6 @@ const AdminDashboardPage: NextPage = () => {
     setIsLoading(true);
     try {
       const dataFromDb = await getVpsInstances();
-      // Data from DB should already match VpsAdminEntry structure
       setVpsEntries(dataFromDb); 
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to fetch VPS data.', variant: 'destructive' });
@@ -119,10 +119,13 @@ const AdminDashboardPage: NextPage = () => {
               <CardDescription>Manage your VPS instances and agent settings.</CardDescription>
             </div>
           </div>
-          <Button onClick={handleLogout} variant="outline" size="sm">
-            <LogOutIcon className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button onClick={handleLogout} variant="outline" size="sm">
+              <LogOutIcon className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-8">
           <div>
@@ -158,7 +161,6 @@ const AdminDashboardPage: NextPage = () => {
                     <TableHead>Agent Ver.</TableHead>
                     <TableHead>Secret</TableHead>
                     <TableHead>Install Cmd</TableHead>
-                    {/* Note column removed from display */}
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -166,7 +168,7 @@ const AdminDashboardPage: NextPage = () => {
                   {isLoading ? (
                      [...Array(3)].map((_, i) => (
                         <TableRow key={`skeleton-${i}`}>
-                          {[...Array(10)].map((_, j) => ( // Adjusted colspan due to Note removal
+                          {[...Array(10)].map((_, j) => (
                             <TableCell key={`cell-${j}`} className="py-3 px-2">
                               <div className="h-4 bg-muted rounded animate-pulse w-full"></div>
                             </TableCell>
@@ -175,7 +177,7 @@ const AdminDashboardPage: NextPage = () => {
                       ))
                   ) : vpsEntries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-24 text-center"> {/* Adjusted colspan */}
+                      <TableCell colSpan={10} className="h-24 text-center">
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                             <ServerIcon className="w-10 h-10" />
                             No VPS data available. Click "Add Server" to begin.
@@ -200,7 +202,6 @@ const AdminDashboardPage: NextPage = () => {
                              <CopyIcon className="mr-1 h-3 w-3" /> Copy
                           </Button>
                         </TableCell>
-                        {/* Note column removed from display */}
                         <TableCell className="text-right">
                           <div className="flex gap-1 justify-end">
                             <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={() => openEditDialog(vps)}>
@@ -229,13 +230,13 @@ const AdminDashboardPage: NextPage = () => {
       
       {selectedVpsToEdit && (
         <EditServerDialog
-          key={selectedVpsToEdit.id} // Add key to force re-render if different VPS is selected
+          key={selectedVpsToEdit.id} 
           open={isEditServerDialogOpen}
           onOpenChange={setIsEditServerDialogOpen}
           vps={selectedVpsToEdit}
           onSuccess={() => {
             fetchVpsData();
-            setSelectedVpsToEdit(null); // Clear selection after dialog closes or succeeds
+            setSelectedVpsToEdit(null); 
           }}
         />
       )}
