@@ -1,0 +1,40 @@
+# Git files
+.git
+.gitignore
+
+# Node modules - these are handled by the Dockerfile's multi-stage build
+node_modules
+
+# Next.js build output - handled by the Dockerfile
+.next
+
+# IDE and editor specific files
+.vscode/
+*.swp
+*.swo
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files - should be passed at runtime
+.env
+.env*.local
+*.env
+
+# Test files and coverage reports (if any)
+coverage/
+*.test.js
+*.test.jsx
+*.test.ts
+*.test.tsx
+
+# Other development artifacts
+README.md
+# Dockerfile and .dockerignore should not be ignored
+# The 'db' directory is intentionally NOT ignored as it's copied into the image.
