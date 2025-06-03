@@ -4,6 +4,7 @@ name: Docker Image CI
 on:
   push:
     branches: [ main ] # Adjust if your default branch is different
+  workflow_dispatch: # Allows manual triggering
 
 permissions:
   contents: read
