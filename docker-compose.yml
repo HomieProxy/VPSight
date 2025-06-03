@@ -1,0 +1,33 @@
+
+version: '3.8'
+
+services:
+  vpsight:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vpsight_app
+    ports:
+      - "9002:3000" # Host port 9002 mapped to container port 3000 (where Next.js runs)
+    volumes:
+      - ./db:/app/db # Persist SQLite database
+      # If you want to persist .next/standalone for faster rebuilds in some cases (optional)
+      # - ./.next/standalone:/app/.next/standalone 
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      # IMPORTANT: Set these environment variables, especially INITIAL_ADMIN_PASSWORD
+      # You can use a .env file (Docker Compose automatically picks it up) or set them here.
+      - INITIAL_ADMIN_USERNAME=admin
+      - INITIAL_ADMIN_PASSWORD=changeme # PLEASE CHANGE THIS IN A PRODUCTION-LIKE SETUP
+      - NEXT_PUBLIC_APP_URL=http://localhost:9002 # Used by agent install command
+      # Add any other necessary runtime environment variables here
+    restart: unless-stopped
+    # networks:
+    #   - vpsight_network # Optional: define a custom network
+
+# Optional: Define a custom network
+# networks:
+#   vpsight_network:
+#     driver: bridge
+
